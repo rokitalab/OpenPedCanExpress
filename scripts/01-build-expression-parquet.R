@@ -37,15 +37,13 @@ if (!dir.exists(output_dir)) {
   dir.create(output_dir, recursive = TRUE)
 }
 
-# Define gene-symbol partitions (each chunk covers ~25% of the alphabet)
-# to keep file sizes under GitHub's 100MB limit
+# Define gene-symbol partitions
+# Using 3 large partitions to reduce memory pressure during processing
+# (fewer iterations = less peak memory usage)
 gene_partitions <- list(
-  "A-D" = c("A", "B", "C", "D"),
-  "E-H" = c("E", "F", "G", "H"),
-  "I-L" = c("I", "J", "K", "L"),
-  "M-P" = c("M", "N", "O", "P"),
-  "Q-T" = c("Q", "R", "S", "T"),
-  "U-Z" = c("U", "V", "W", "X", "Y", "Z")
+  "A-H" = c("A", "B", "C", "D", "E", "F", "G", "H"),
+  "I-P" = c("I", "J", "K", "L", "M", "N", "O", "P"),
+  "Q-Z" = c("Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z")
 )
 
 message("OpenPedCanExpress: Building expression Parquet files")
@@ -111,9 +109,9 @@ message("\n[2/6] Loading TPM matrices...")
 tumor_tpm <- readRDS(file.path(source_dir, "gene-expression-rsem-tpm-collapsed.rds"))
 message("  Tumor TPM: ", nrow(tumor_tpm), " genes x ", ncol(tumor_tpm), " samples")
 
-# GTEx TPM
-gtex_tpm <- readRDS(file.path(source_dir, "gtex_gene-expression-rsem-tpm-collapsed.rds"))
-message("  GTEx TPM: ", nrow(gtex_tpm), " genes x ", ncol(gtex_tpm), " samples")
+# GTEx TPM (pre-filtered to brain <40)
+gtex_tpm <- readRDS(file.path(source_dir, "gtex-harmonized-gene-expression-rsem-tpm-collapsed.brain-under40.rds"))
+message("  GTEx TPM (brain <40): ", nrow(gtex_tpm), " genes x ", ncol(gtex_tpm), " samples")
 
 # Pediatric normal brain TPM
 pedbrain_tpm <- readRDS(file.path(source_dir, "ped-normal-brain-gene-expression-rsem-tpm.all.rds"))
@@ -129,16 +127,19 @@ message("  Evo-devo TPM: ", nrow(evodevo_tpm), " genes x ", ncol(evodevo_tpm), "
 
 message("\n[3/6] Processing tumor samples...")
 
+# Filter columns BEFORE pivoting to save memory
+tumor_samples_keep <- intersect(colnames(tumor_tpm), independent_specimens)
+message("  Keeping ", length(tumor_samples_keep), " of ", ncol(tumor_tpm), " tumor samples")
+
 tumor_long <- tumor_tpm %>%
   as.data.frame() %>%
+  select(all_of(tumor_samples_keep)) %>%
   rownames_to_column("gene_symbol") %>%
   pivot_longer(
     cols = -gene_symbol,
     names_to = "sample_id",
     values_to = "tpm"
   ) %>%
-  # Keep only independent primary tumors
-  filter(sample_id %in% independent_specimens) %>%
   # Join metadata
   left_join(
     histologies %>%
@@ -164,12 +165,19 @@ tumor_long <- tumor_tpm %>%
 
 message("  ", format(nrow(tumor_long), big.mark = ","), " tumor expression values")
 
+# Save to temp file and free memory
+temp_tumor_file <- file.path(output_dir, "_temp_tumor.rds")
+saveRDS(tumor_long, temp_tumor_file)
+rm(tumor_long, tumor_tpm, tumor_samples_keep)
+gc()
+
 # ==============================================================================
 # Process GTEx samples
 # ==============================================================================
 
 message("\n[4/6] Processing GTEx samples...")
 
+# GTEx file is already pre-filtered to brain <40, so just convert to long format
 gtex_long <- gtex_tpm %>%
   as.data.frame() %>%
   rownames_to_column("gene_symbol") %>%
@@ -178,8 +186,6 @@ gtex_long <- gtex_tpm %>%
     names_to = "sample_id",
     values_to = "tpm"
   ) %>%
-  # Keep only <40 years old
-  filter(sample_id %in% gtex_under40_samples) %>%
   # Join metadata
   left_join(
     histologies %>%
@@ -192,8 +198,6 @@ gtex_long <- gtex_tpm %>%
       ),
     by = "sample_id"
   ) %>%
-  # Keep only brain samples
-  filter(str_detect(gtex_subgroup, "Brain")) %>%
   mutate(
     source_cohort = "GTEx (<40yo)",
     plot_group = str_remove(gtex_subgroup, "Brain - "),
@@ -210,17 +214,22 @@ gtex_long <- gtex_tpm %>%
 
 message("  ", format(nrow(gtex_long), big.mark = ","), " GTEx expression values")
 
+# Save to temp file and free memory
+temp_gtex_file <- file.path(output_dir, "_temp_gtex.rds")
+saveRDS(gtex_long, temp_gtex_file)
+rm(gtex_long, gtex_tpm)
+gc()
+
 # ==============================================================================
 # Process pediatric normal brain samples
 # ==============================================================================
 
 message("\n[5/6] Processing pediatric normal brain samples...")
 
-# The ped-normal-brain RDS has Ensembl IDs; need to strip to gene symbol
+# The ped-normal-brain RDS already has gene_id as first column (not rownames)
+# Extract gene symbol from "ENSGXXX.XX_SYMBOL" format
 pedbrain_long <- pedbrain_tpm %>%
   as.data.frame() %>%
-  rownames_to_column("gene_id") %>%
-  # Extract gene symbol from "ENSGXXX.XX_SYMBOL" format
   mutate(gene_symbol = str_replace(gene_id, "^.*_", "")) %>%
   select(-gene_id) %>%
   pivot_longer(
@@ -254,6 +263,12 @@ pedbrain_long <- pedbrain_tpm %>%
   )
 
 message("  ", format(nrow(pedbrain_long), big.mark = ","), " ped normal brain expression values")
+
+# Save to temp file and free memory
+temp_pedbrain_file <- file.path(output_dir, "_temp_pedbrain.rds")
+saveRDS(pedbrain_long, temp_pedbrain_file)
+rm(pedbrain_long, pedbrain_tpm)
+gc()
 
 # ==============================================================================
 # Process evo-devo samples
@@ -304,84 +319,131 @@ evodevo_long <- evodevo_tpm %>%
 
 message("  ", format(nrow(evodevo_long), big.mark = ","), " evo-devo expression values")
 
-# ==============================================================================
-# Combine all cohorts
-# ==============================================================================
-
-message("\nCombining all cohorts...")
-
-combined_long <- bind_rows(
-  tumor_long,
-  gtex_long,
-  pedbrain_long,
-  evodevo_long
-) %>%
-  select(
-    gene_symbol,
-    sample_id,
-    tpm,
-    source_cohort,
-    plot_group,
-    cohort,
-    composition,
-    short_histology,
-    broad_histology,
-    molecular_subtype,
-    cancer_group,
-    primary_site,
-    RNA_library,
-    is_tumor,
-    is_control,
-    everything()
-  )
-
-message("  Total: ", format(nrow(combined_long), big.mark = ","), " expression values across ",
-        length(unique(combined_long$sample_id)), " samples and ",
-        length(unique(combined_long$gene_symbol)), " genes")
+# Save to temp file and free memory
+temp_evodevo_file <- file.path(output_dir, "_temp_evodevo.rds")
+saveRDS(evodevo_long, temp_evodevo_file)
+rm(evodevo_long, evodevo_tpm)
+gc()
 
 # ==============================================================================
-# Partition by gene symbol and write Parquet
+# Partition by gene symbol and write Parquet (memory-efficient approach)
 # ==============================================================================
 
-message("\nPartitioning and writing Parquet files...")
+message("\nPartitioning and writing Parquet files (processing one partition at a time)...")
+
+# Free up metadata we no longer need
+rm(histologies, pedbrain_histologies, evodevo_histologies, independent_specimens, gtex_age, gtex_under40_samples)
+gc()
+
+# Standardize column order for all cohorts
+standard_cols <- c(
+  "gene_symbol", "sample_id", "tpm",
+  "source_cohort", "plot_group", "cohort", "composition",
+  "short_histology", "broad_histology", "molecular_subtype",
+  "cancer_group", "primary_site", "RNA_library",
+  "is_tumor", "is_control"
+)
 
 manifest <- list()
+total_rows <- 0
+all_genes <- character()
 
 for (partition_name in names(gene_partitions)) {
+  message(sprintf("\nProcessing partition %s...", partition_name))
   letters_in_partition <- gene_partitions[[partition_name]]
 
-  partition_df <- combined_long %>%
-    filter(str_sub(gene_symbol, 1, 1) %in% letters_in_partition)
+  # Load each cohort from temp file, filter, and combine
+  # Load one at a time to minimize peak memory usage
+  message("  Loading tumor data...")
+  tumor_partition <- readRDS(temp_tumor_file) %>%
+    filter(str_sub(gene_symbol, 1, 1) %in% letters_in_partition) %>%
+    select(all_of(standard_cols))
+
+  message("  Loading GTEx data...")
+  gtex_partition <- readRDS(temp_gtex_file) %>%
+    filter(str_sub(gene_symbol, 1, 1) %in% letters_in_partition) %>%
+    select(all_of(standard_cols))
+
+  message("  Loading pediatric normal brain data...")
+  pedbrain_partition <- readRDS(temp_pedbrain_file) %>%
+    filter(str_sub(gene_symbol, 1, 1) %in% letters_in_partition) %>%
+    select(all_of(standard_cols))
+
+  message("  Loading evo-devo data...")
+  evodevo_partition <- readRDS(temp_evodevo_file) %>%
+    filter(str_sub(gene_symbol, 1, 1) %in% letters_in_partition) %>%
+    select(all_of(standard_cols))
+
+  # Combine just this partition
+  message("  Combining cohorts...")
+  partition_df <- bind_rows(
+    tumor_partition,
+    gtex_partition,
+    pedbrain_partition,
+    evodevo_partition
+  )
+
+  # Free memory
+  rm(tumor_partition, gtex_partition, pedbrain_partition, evodevo_partition)
+  gc()
+
+  if (nrow(partition_df) == 0) {
+    message(sprintf("  Skipping %s (no genes)", partition_name))
+    next
+  }
 
   output_file <- file.path(output_dir, paste0("genes_", partition_name, ".parquet"))
 
   write_parquet(partition_df, output_file)
 
   file_size_mb <- file.size(output_file) / 1024^2
+  n_genes <- length(unique(partition_df$gene_symbol))
+  n_rows <- nrow(partition_df)
 
   message(sprintf("  %s: %s genes, %s rows, %.1f MB",
                   partition_name,
-                  format(length(unique(partition_df$gene_symbol)), big.mark = ","),
-                  format(nrow(partition_df), big.mark = ","),
+                  format(n_genes, big.mark = ","),
+                  format(n_rows, big.mark = ","),
                   file_size_mb))
 
   manifest[[partition_name]] <- list(
     file = basename(output_file),
     letters = letters_in_partition,
-    n_genes = length(unique(partition_df$gene_symbol)),
-    n_rows = nrow(partition_df),
+    n_genes = n_genes,
+    n_rows = n_rows,
     size_mb = round(file_size_mb, 2)
   )
+
+  total_rows <- total_rows + n_rows
+  all_genes <- c(all_genes, unique(partition_df$gene_symbol))
+
+  # Free memory for next iteration
+  rm(partition_df)
+  gc()
 }
 
 # Write manifest
 manifest_file <- file.path(output_dir, "manifest.json")
+
+# Count total unique samples across all cohorts
+message("\nCounting total samples...")
+temp_sample_counts <- length(unique(c(
+  readRDS(temp_tumor_file)$sample_id,
+  readRDS(temp_gtex_file)$sample_id,
+  readRDS(temp_pedbrain_file)$sample_id,
+  readRDS(temp_evodevo_file)$sample_id
+)))
+
+# Clean up temp files
+message("Cleaning up temporary files...")
+unlink(c(temp_tumor_file, temp_gtex_file, temp_pedbrain_file, temp_evodevo_file))
+
 write_json(
   list(
     generated_at = Sys.time(),
-    total_genes = length(unique(combined_long$gene_symbol)),
-    total_samples = length(unique(combined_long$sample_id)),
-    total_rows = nrow(combined_long),
+    total_genes = length(unique(all_genes)),
+    total_samples = temp_sample_counts,
+    total_rows = total_rows,
     partitions = manifest
   ),
   manifest_file,
@@ -389,5 +451,10 @@ write_json(
   auto_unbox = TRUE
 )
 
-message("\nManifest written to: ", manifest_file)
-message("\nDone! Parquet files written to: ", output_dir)
+message("\n================================================================================")
+message("Done!")
+message("================================================================================")
+message(sprintf("Total genes: %s", format(length(unique(all_genes)), big.mark = ",")))
+message(sprintf("Total rows: %s", format(total_rows, big.mark = ",")))
+message(sprintf("Manifest: %s", manifest_file))
+message(sprintf("Parquet files: %s", output_dir))

@@ -69,25 +69,43 @@ Requires R and the following packages: `tidyverse`, `nanoparquet`, `jsonlite`
    - Partitions by gene-symbol range (A–D, E–H, etc.) to stay under GitHub's 100MB file limit
    - Writes Parquet chunks to `data/partitions/` plus a JSON manifest
 
-3. **Generated files** (gitignored, ~500MB total):
+3. **Generated files** (~500MB total):
    ```
-   data/partitions/genes_A-D.parquet
-   data/partitions/genes_E-H.parquet
-   ...
+   data/partitions/genes_A-H.parquet (244 MB)
+   data/partitions/genes_I-P.parquet (113 MB)
+   data/partitions/genes_Q-Z.parquet (120 MB)
    data/partitions/manifest.json
    ```
 
 ## Deployment
 
-Hosted on GitHub Pages via the `gh-pages` branch (auto-deployed from `main`).
+### 1. Upload Parquet files to S3
 
-To deploy manually:
+The Parquet files are too large for GitHub (>100MB each), so they're hosted on S3:
+
 ```bash
-# The public/ directory is the web root
-git subtree push --prefix public origin gh-pages
+# Upload to your S3 bucket
+aws s3 cp data/partitions/genes_A-H.parquet s3://YOUR-BUCKET/openpedcanexpress/ --acl public-read
+aws s3 cp data/partitions/genes_I-P.parquet s3://YOUR-BUCKET/openpedcanexpress/ --acl public-read
+aws s3 cp data/partitions/genes_Q-Z.parquet s3://YOUR-BUCKET/openpedcanexpress/ --acl public-read
 ```
 
-Or enable GitHub Actions to auto-build on push (see `.github/workflows/deploy.yml` — coming soon).
+Then update `public/index.html` line 282 with your bucket URL:
+```javascript
+const S3_BUCKET_URL = 'https://YOUR-BUCKET.s3.amazonaws.com/openpedcanexpress';
+```
+
+### 2. Deploy web app to GitHub Pages
+
+The web app (HTML/JS) is hosted on GitHub Pages, auto-deployed via GitHub Actions on push to `main`.
+
+Or deploy manually:
+```bash
+# Commit changes and push (this triggers GitHub Actions deployment)
+git push origin main
+```
+
+The GitHub Actions workflow (`.github/workflows/deploy.yml`) automatically deploys the `public/` directory to GitHub Pages.
 
 ## Data provenance
 
