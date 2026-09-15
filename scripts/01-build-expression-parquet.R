@@ -5,15 +5,15 @@
 # Builds long-format Parquet files from OpenPedCan TPM matrices for OpenPedCanExpress.
 #
 # Input (expected in data/source/):
-#   - histologies.tsv
+#   - histologies.tsv (or uses TAPESTRY cohort-histologies.tsv for plot groups)
 #   - gene-expression-rsem-tpm-collapsed.rds
-#   - gtex_gene-expression-rsem-tpm-collapsed.rds
+#   - gtex-harmonized-gene-expression-rsem-tpm-collapsed.brain-under40.rds
 #   - ped-normal-brain-gene-expression-rsem-tpm.all.rds
 #   - evodevo_gene-expression-rsem-tpm-collapsed.all.rds
 #   - ped-normal-brain-histologies.tsv
 #   - evodevo-histologies.tsv
 #   - gtex-samples-by-age.tsv
-#   - independent-specimens.rnaseq.primary-plus-pre-release.tsv
+#   - independent-specimens.rnaseqpanel.primary.tsv
 #
 # Output (written to data/partitions/):
 #   - genes_A-D.parquet, genes_E-H.parquet, ... (partitioned by gene symbol)
@@ -56,15 +56,24 @@ message("Output directory: ", output_dir)
 
 message("\n[1/6] Loading metadata...")
 
-# Main histologies file (tumors, GTEx, etc.)
-histologies <- read_tsv(
+# Load both histologies files:
+# - TAPESTRY cohort-histologies.tsv for tumor plot_group
+# - OpenPedCan histologies.tsv for GTEx metadata
+tapestry_repo <- "/Users/jrokita/Documents/GitHub/tumor-enriched-splicing"
+tapestry_histologies <- read_tsv(
+  file.path(tapestry_repo, "analyses/00-create-cohort-histologies/results/cohort-histologies.tsv"),
+  show_col_types = FALSE
+)
+
+# OpenPedCan histologies for GTEx
+openpedcan_histologies <- read_tsv(
   file.path(source_dir, "histologies.tsv"),
   show_col_types = FALSE
 )
 
 # Independent specimens (primary tumors only)
 independent_specimens <- read_tsv(
-  file.path(source_dir, "independent-specimens.rnaseq.primary-plus-pre-release.tsv"),
+  file.path(source_dir, "independent-specimens.rnaseqpanel.primary.tsv"),
   show_col_types = FALSE
 ) %>%
   filter(tumor_descriptor %in% c("Initial CNS Tumor", "Primary Tumor")) %>%
@@ -93,7 +102,8 @@ evodevo_histologies <- read_tsv(
   show_col_types = FALSE
 )
 
-message("  Loaded ", nrow(histologies), " rows from histologies.tsv")
+message("  Loaded ", nrow(tapestry_histologies), " rows from TAPESTRY cohort-histologies.tsv")
+message("  Loaded ", nrow(openpedcan_histologies), " rows from OpenPedCan histologies.tsv")
 message("  ", length(independent_specimens), " independent primary tumor specimens")
 message("  ", length(gtex_under40_samples), " GTEx <40yo samples")
 message("  ", nrow(pedbrain_histologies), " pediatric normal brain samples")
@@ -127,43 +137,94 @@ message("  Evo-devo TPM: ", nrow(evodevo_tpm), " genes x ", ncol(evodevo_tpm), "
 
 message("\n[3/6] Processing tumor samples...")
 
-# Filter columns BEFORE pivoting to save memory
-tumor_samples_keep <- intersect(colnames(tumor_tpm), independent_specimens)
-message("  Keeping ", length(tumor_samples_keep), " of ", ncol(tumor_tpm), " tumor samples")
-
-tumor_long <- tumor_tpm %>%
-  as.data.frame() %>%
-  select(all_of(tumor_samples_keep)) %>%
-  rownames_to_column("gene_symbol") %>%
-  pivot_longer(
-    cols = -gene_symbol,
-    names_to = "sample_id",
-    values_to = "tpm"
+# Process each cohort separately to avoid memory issues
+# Prepare metadata for joining
+tumor_metadata_opc <- openpedcan_histologies %>%
+  filter(
+    sample_type == "Tumor",
+    experimental_strategy == "RNA-Seq",
+    cohort %in% c("PBTA", "TARGET", "GMKF", "DGD")
   ) %>%
-  # Join metadata
-  left_join(
-    histologies %>%
-      select(
-        sample_id = Kids_First_Biospecimen_ID,
-        cohort,
-        composition,
-        short_histology,
-        broad_histology,
-        molecular_subtype,
-        cancer_group,
-        RNA_library,
-        primary_site
-      ),
-    by = "sample_id"
-  ) %>%
-  mutate(
-    source_cohort = "PBTA",
-    plot_group = short_histology,
-    is_tumor = TRUE,
-    is_control = FALSE
+  select(
+    sample_id = Kids_First_Biospecimen_ID,
+    cohort,
+    composition,
+    short_histology,
+    broad_histology,
+    molecular_subtype,
+    cancer_group,
+    RNA_library,
+    primary_site
   )
 
-message("  ", format(nrow(tumor_long), big.mark = ","), " tumor expression values")
+tumor_metadata_tapestry <- tapestry_histologies %>%
+  select(
+    sample_id = Kids_First_Biospecimen_ID,
+    plot_group_tapestry = plot_group
+  )
+
+# Process cohorts one at a time
+tumor_parts <- list()
+for (cohort_name in c("PBTA", "TARGET", "GMKF", "DGD")) {
+  tryCatch({
+    message("  Processing ", cohort_name, "...")
+
+    cohort_samples <- tumor_metadata_opc %>%
+      filter(cohort == cohort_name) %>%
+      pull(sample_id)
+
+    samples_in_tpm <- intersect(colnames(tumor_tpm), cohort_samples)
+
+    if (length(samples_in_tpm) == 0) {
+      message("    No samples found in TPM matrix, skipping")
+      next
+    }
+
+    message("    ", length(samples_in_tpm), " samples - converting to long format...")
+
+    cohort_long <- tumor_tpm %>%
+      as.data.frame() %>%
+      select(all_of(samples_in_tpm)) %>%
+      rownames_to_column("gene_symbol") %>%
+      pivot_longer(
+        cols = -gene_symbol,
+        names_to = "sample_id",
+        values_to = "tpm"
+      )
+
+    message("    Joining metadata...")
+    cohort_long <- cohort_long %>%
+      left_join(tumor_metadata_opc, by = "sample_id") %>%
+      left_join(tumor_metadata_tapestry, by = "sample_id") %>%
+      mutate(
+        source_cohort = cohort,
+        plot_group = coalesce(plot_group_tapestry, short_histology),
+        plot_group = case_when(
+          plot_group == "DIPG or DMG" ~ "Diffuse midline glioma",
+          TRUE ~ plot_group
+        ),
+        is_tumor = TRUE,
+        is_control = FALSE
+      ) %>%
+      select(-plot_group_tapestry)
+
+    message("    Complete: ", format(nrow(cohort_long), big.mark=","), " rows")
+    tumor_parts[[cohort_name]] <- cohort_long
+    rm(cohort_long)
+    gc(verbose=FALSE)
+  }, error = function(e) {
+    message("    ERROR: ", e$message)
+  })
+}
+
+# Combine all cohorts
+message("  Combining cohorts...")
+tumor_long <- bind_rows(tumor_parts)
+rm(tumor_parts)
+gc()
+
+message("  ", format(nrow(tumor_long), big.mark = ","), " tumor expression values from ",
+        length(unique(tumor_long$source_cohort)), " cohorts")
 
 # Save to temp file and free memory
 temp_tumor_file <- file.path(output_dir, "_temp_tumor.rds")
@@ -186,9 +247,9 @@ gtex_long <- gtex_tpm %>%
     names_to = "sample_id",
     values_to = "tpm"
   ) %>%
-  # Join metadata
+  # Join metadata (using OpenPedCan histologies for GTEx)
   left_join(
-    histologies %>%
+    openpedcan_histologies %>%
       filter(cohort == "GTEx") %>%
       select(
         sample_id = Kids_First_Biospecimen_ID,
@@ -200,7 +261,7 @@ gtex_long <- gtex_tpm %>%
   ) %>%
   mutate(
     source_cohort = "GTEx (<40yo)",
-    plot_group = str_remove(gtex_subgroup, "Brain - "),
+    plot_group = str_remove(gtex_subgroup, "Brain - ") %>% str_remove(" \\(basal ganglia\\)"),
     cohort = "GTEx",
     composition = "Normal",
     short_histology = NA_character_,
@@ -296,15 +357,13 @@ evodevo_long <- evodevo_tpm %>%
     by = "sample_id"
   ) %>%
   # Parse region and timepoint from pathology_free_text_diagnosis
-  # Expected format: "Forebrain-4 Week Post Conception" or "Hindbrain-Neonate"
+  # Format: "4 Week Post Conception", "Neonate", etc.
   mutate(
-    region_timepoint = pathology_free_text_diagnosis,
-    region = str_extract(region_timepoint, "^[^-]+"),
-    timepoint = str_replace(region_timepoint, "^[^-]+-", "")
+    timepoint = str_replace(pathology_free_text_diagnosis, "Neonate", "Newborn")
   ) %>%
   mutate(
     source_cohort = "Evo-devo",
-    plot_group = region_timepoint,
+    plot_group = timepoint,
     cohort = "Evo-devo",
     composition = "Normal",
     short_histology = NA_character_,
@@ -332,14 +391,14 @@ gc()
 message("\nPartitioning and writing Parquet files (processing one partition at a time)...")
 
 # Free up metadata we no longer need
-rm(histologies, pedbrain_histologies, evodevo_histologies, independent_specimens, gtex_age, gtex_under40_samples)
+rm(tapestry_histologies, openpedcan_histologies, pedbrain_histologies, evodevo_histologies, independent_specimens, gtex_age, gtex_under40_samples)
 gc()
 
 # Standardize column order for all cohorts
 standard_cols <- c(
   "gene_symbol", "sample_id", "tpm",
   "source_cohort", "plot_group", "cohort", "composition",
-  "short_histology", "broad_histology", "molecular_subtype",
+  "broad_histology", "molecular_subtype",
   "cancer_group", "primary_site", "RNA_library",
   "is_tumor", "is_control"
 )
