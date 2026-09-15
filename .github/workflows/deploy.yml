@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature/initial-scaffolding  # Temporary: for testing before merge
   workflow_dispatch:
 
 permissions:
