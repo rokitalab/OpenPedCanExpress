@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenPedCanExpress — Pediatric Brain Tumor Gene Expression Explorer</title>
+  <meta name="description" content="Interactive browser-based tool for exploring gene expression across pediatric brain tumors and normal tissue controls">
+
+  <!-- D3.js -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <!-- DuckDB-WASM -->
+  <script src="https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-mvp.wasm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-mvp.worker.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-mvp.wasm"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f5f5f5;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 2rem;
+    }
+
+    header {
+      margin-bottom: 2rem;
+      border-bottom: 2px solid #e0e0e0;
+      padding-bottom: 1rem;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #1a1a1a;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      font-size: 1rem;
+      color: #666;
+    }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding: 1rem;
+      background: #f9f9f9;
+      border-radius: 6px;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 300px;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      transition: border-color 0.2s;
+    }
+
+    .search-box input:focus {
+      outline: none;
+      border-color: #4a90e2;
+    }
+
+    .toggle-group {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    button {
+      padding: 0.75rem 1.5rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    button.primary {
+      background: #4a90e2;
+      color: white;
+    }
+
+    button.primary:hover {
+      background: #357abd;
+    }
+
+    button.secondary {
+      background: #e0e0e0;
+      color: #333;
+    }
+
+    button.secondary:hover {
+      background: #d0d0d0;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 3rem;
+      color: #666;
+    }
+
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #4a90e2;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .error {
+      background: #fee;
+      color: #c33;
+      padding: 1rem;
+      border-radius: 6px;
+      border-left: 4px solid #c33;
+      margin-bottom: 1rem;
+    }
+
+    .plot-container {
+      margin-top: 2rem;
+      min-height: 500px;
+    }
+
+    .plot-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: rgba(30,30,30,0.95);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      line-height: 1.5;
+      pointer-events: none;
+      z-index: 1000;
+      white-space: nowrap;
+      display: none;
+    }
+
+    footer {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #e0e0e0;
+      text-align: center;
+      font-size: 0.9rem;
+      color: #666;
+    }
+
+    footer a {
+      color: #4a90e2;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>OpenPedCanExpress</h1>
+      <p class="subtitle">Interactive gene expression explorer for pediatric brain tumors vs. normal controls</p>
+    </header>
+
+    <div class="controls">
+      <div class="search-box">
+        <input
+          type="text"
+          id="gene-search"
+          placeholder="Search for a gene (e.g., EGFR, TP53, CD276)..."
+          autocomplete="off"
+        />
+      </div>
+
+      <div class="toggle-group">
+        <label>
+          <input type="checkbox" id="log2-toggle" checked />
+          <span>log₂ scale</span>
+        </label>
+      </div>
+
+      <button class="secondary" id="export-btn" disabled>Export Plot</button>
+    </div>
+
+    <div id="status-area"></div>
+
+    <div class="plot-container">
+      <div class="plot-title" id="plot-title">Enter a gene to begin</div>
+      <svg id="plot-svg" width="1200" height="500"></svg>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+
+  <footer>
+    <p>
+      Data from <a href="https://github.com/PediatricOpenTargets/OpenPedCan-analysis" target="_blank">OpenPedCan</a> ·
+      Built with <a href="https://duckdb.org/docs/api/wasm" target="_blank">DuckDB-WASM</a> and <a href="https://d3js.org" target="_blank">D3.js</a> ·
+      <a href="https://github.com/rokitalab/OpenPedCanExpress" target="_blank">Source on GitHub</a>
+    </p>
+  </footer>
+
+  <script type="module">
+    // ===========================================================================
+    // DuckDB-WASM initialization
+    // ===========================================================================
+
+    let db = null;
+    let conn = null;
+
+    async function initDuckDB() {
+      showStatus('Loading DuckDB...', false);
+
+      const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+      const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+      const worker = new Worker(bundle.mainWorker);
+      const logger = new duckdb.ConsoleLogger();
+      db = new duckdb.AsyncDuckDB(logger, worker);
+      await db.instantiate(bundle.mainModule);
+      conn = await db.connect();
+
+      // Register Parquet files
+      const partitions = [
+        'genes_A-D.parquet',
+        'genes_E-H.parquet',
+        'genes_I-L.parquet',
+        'genes_M-P.parquet',
+        'genes_Q-T.parquet',
+        'genes_U-Z.parquet'
+      ];
+
+      for (const file of partitions) {
+        await conn.query(`
+          CREATE OR REPLACE VIEW expr_data AS
+          SELECT * FROM parquet_scan('../data/partitions/${file}')
+          ${partitions.indexOf(file) > 0 ? 'UNION ALL SELECT * FROM expr_data' : ''}
+        `);
+      }
+
+      showStatus('Ready! Search for a gene above.', false);
+    }
+
+    // ===========================================================================
+    // UI helpers
+    // ===========================================================================
+
+    function showStatus(message, isError = false) {
+      const statusArea = document.getElementById('status-area');
+      if (!message) {
+        statusArea.innerHTML = '';
+        return;
+      }
+
+      if (isError) {
+        statusArea.innerHTML = `<div class="error">${message}</div>`;
+      } else {
+        statusArea.innerHTML = `<div class="loading"><div class="spinner"></div><p>${message}</p></div>`;
+      }
+    }
+
+    function clearStatus() {
+      document.getElementById('status-area').innerHTML = '';
+    }
+
+    // ===========================================================================
+    // Gene search and data fetching
+    // ===========================================================================
+
+    let currentGene = null;
+    let currentData = null;
+
+    document.getElementById('gene-search').addEventListener('keypress', async (e) => {
+      if (e.key === 'Enter') {
+        const gene = e.target.value.trim().toUpperCase();
+        if (!gene) return;
+
+        await fetchGeneData(gene);
+      }
+    });
+
+    async function fetchGeneData(gene) {
+      if (!conn) {
+        showStatus('Database not ready. Please wait...', true);
+        return;
+      }
+
+      showStatus(`Loading expression data for ${gene}...`, false);
+      currentGene = gene;
+
+      try {
+        const result = await conn.query(`
+          SELECT
+            gene_symbol,
+            sample_id,
+            tpm,
+            source_cohort,
+            plot_group,
+            cohort,
+            short_histology,
+            molecular_subtype,
+            is_tumor,
+            is_control
+          FROM expr_data
+          WHERE gene_symbol = '${gene}'
+        `);
+
+        const rows = result.toArray().map(row => Object.fromEntries(row));
+
+        if (rows.length === 0) {
+          showStatus(`No data found for gene "${gene}". Try another gene.`, true);
+          return;
+        }
+
+        currentData = rows;
+        clearStatus();
+        renderPlot();
+        document.getElementById('export-btn').disabled = false;
+
+      } catch (err) {
+        showStatus(`Error loading data: ${err.message}`, true);
+      }
+    }
+
+    // ===========================================================================
+    // D3 Box Plot Rendering
+    // ===========================================================================
+
+    const MARGIN = { top: 40, right: 20, bottom: 160, left: 100 };
+
+    function boxStats(values) {
+      const sorted = values.slice().sort(d3.ascending);
+      const q1 = d3.quantile(sorted, 0.25);
+      const median = d3.quantile(sorted, 0.5);
+      const q3 = d3.quantile(sorted, 0.75);
+      const iqr = q3 - q1;
+      return {
+        q1, median, q3,
+        lo: Math.max(d3.min(sorted), q1 - 1.5 * iqr),
+        hi: Math.min(d3.max(sorted), q3 + 1.5 * iqr)
+      };
+    }
+
+    function renderPlot() {
+      if (!currentData || currentData.length === 0) return;
+
+      const log2Scale = document.getElementById('log2-toggle').checked;
+      const svg = d3.select('#plot-svg');
+      const width = 1200;
+      const height = 500;
+
+      svg.attr('width', width).attr('height', height);
+      svg.selectAll('*').remove();
+
+      const iW = width - MARGIN.left - MARGIN.right;
+      const iH = height - MARGIN.top - MARGIN.bottom;
+
+      // Transform TPM values
+      const xform = (tpm) => log2Scale ? Math.log2(tpm + 1) : tpm;
+
+      // Group by plot_group
+      const grouped = d3.group(currentData, d => d.plot_group);
+      const groups = Array.from(grouped, ([key, values]) => ({
+        key,
+        label: key,
+        values: values.map(v => ({ ...v, tpm_transformed: xform(v.tpm) })),
+        is_tumor: values[0].is_tumor,
+        is_control: values[0].is_control,
+        cohort: values[0].source_cohort
+      }));
+
+      // Sort groups: tumors first, then controls
+      groups.sort((a, b) => {
+        if (a.is_tumor !== b.is_tumor) return a.is_tumor ? -1 : 1;
+        return a.label.localeCompare(b.label);
+      });
+
+      // Scales
+      const allVals = currentData.map(d => xform(d.tpm));
+      const yMax = d3.max(allVals) ?? 1;
+      const y = d3.scaleLinear().domain([0, yMax]).nice().range([iH, 0]);
+
+      const x = d3.scaleBand()
+        .domain(groups.map(g => g.key))
+        .range([0, iW])
+        .padding(0.25);
+
+      const root = svg.append('g')
+        .attr('transform', `translate(${MARGIN.left},${MARGIN.top})`);
+
+      // Grid lines
+      root.append('g')
+        .call(d3.axisLeft(y).tickSize(-iW).tickFormat(''))
+        .call(g => g.select('.domain').remove())
+        .call(g => g.selectAll('line').attr('stroke', '#e0e0e0').attr('stroke-dasharray', '3,3'));
+
+      // X axis
+      root.append('g')
+        .attr('transform', `translate(0,${iH})`)
+        .call(d3.axisBottom(x))
+        .selectAll('text')
+        .attr('transform', 'rotate(-55)')
+        .style('text-anchor', 'end')
+        .attr('dx', '-0.5em')
+        .attr('dy', '0.15em');
+
+      // Y axis
+      root.append('g').call(d3.axisLeft(y));
+
+      // Y axis label
+      root.append('text')
+        .attr('transform', 'rotate(-90)')
+        .attr('x', -iH / 2)
+        .attr('y', -60)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', 14)
+        .style('fill', '#666')
+        .text(log2Scale ? 'log₂(TPM + 1)' : 'TPM');
+
+      // Box plots
+      groups.forEach(g => {
+        const { key, label, values } = g;
+        const tpms = values.map(v => v.tpm_transformed);
+        const stats = boxStats(tpms);
+        const cx = x(key) + x.bandwidth() / 2;
+        const bw = x.bandwidth() * 0.7;
+
+        // Whiskers
+        root.append('line')
+          .attr('x1', cx).attr('x2', cx)
+          .attr('y1', y(stats.lo)).attr('y2', y(stats.q1))
+          .attr('stroke', '#333')
+          .attr('stroke-width', 1.5)
+          .attr('stroke-dasharray', '4,2');
+
+        root.append('line')
+          .attr('x1', cx).attr('x2', cx)
+          .attr('y1', y(stats.q3)).attr('y2', y(stats.hi))
+          .attr('stroke', '#333')
+          .attr('stroke-width', 1.5)
+          .attr('stroke-dasharray', '4,2');
+
+        // Whisker caps
+        [stats.lo, stats.hi].forEach(v => {
+          root.append('line')
+            .attr('x1', cx - bw / 4).attr('x2', cx + bw / 4)
+            .attr('y1', y(v)).attr('y2', y(v))
+            .attr('stroke', '#333')
+            .attr('stroke-width', 1.5);
+        });
+
+        // Box
+        root.append('rect')
+          .attr('x', cx - bw / 2)
+          .attr('y', y(stats.q3))
+          .attr('width', bw)
+          .attr('height', Math.abs(y(stats.q1) - y(stats.q3)))
+          .attr('fill', g.is_tumor ? '#e74c3c' : '#3498db')
+          .attr('fill-opacity', 0.3)
+          .attr('stroke', '#333')
+          .attr('stroke-width', 1.5)
+          .attr('rx', 2);
+
+        // Median line
+        root.append('line')
+          .attr('x1', cx - bw / 2).attr('x2', cx + bw / 2)
+          .attr('y1', y(stats.median)).attr('y2', y(stats.median))
+          .attr('stroke', '#333')
+          .attr('stroke-width', 2.5);
+
+        // Individual points
+        values.forEach((v, i) => {
+          const jitter = (Math.random() - 0.5) * bw * 0.6;
+          root.append('circle')
+            .attr('cx', cx + jitter)
+            .attr('cy', y(v.tpm_transformed))
+            .attr('r', 3)
+            .attr('fill', g.is_tumor ? '#e74c3c' : '#3498db')
+            .attr('fill-opacity', 0.5)
+            .attr('stroke', '#333')
+            .attr('stroke-width', 0.5)
+            .style('cursor', 'pointer')
+            .on('mouseover', (event) => showTooltip(event, v, label, log2Scale))
+            .on('mouseout', hideTooltip);
+        });
+      });
+
+      // Update title
+      document.getElementById('plot-title').textContent = `${currentGene} Expression`;
+    }
+
+    // ===========================================================================
+    // Tooltip
+    // ===========================================================================
+
+    function showTooltip(event, dataPoint, group, isLog2) {
+      const tooltip = document.getElementById('tooltip');
+      const value = isLog2 ? Math.log2(dataPoint.tpm + 1) : dataPoint.tpm;
+      const label = isLog2 ? 'log₂(TPM+1)' : 'TPM';
+
+      tooltip.innerHTML = `
+        <strong>${dataPoint.sample_id}</strong><br/>
+        ${group}<br/>
+        ${label}: ${value.toFixed(3)}
+      `;
+
+      tooltip.style.display = 'block';
+      tooltip.style.left = (event.pageX + 14) + 'px';
+      tooltip.style.top = (event.pageY - 32) + 'px';
+    }
+
+    function hideTooltip() {
+      document.getElementById('tooltip').style.display = 'none';
+    }
+
+    // ===========================================================================
+    // Event listeners
+    // ===========================================================================
+
+    document.getElementById('log2-toggle').addEventListener('change', () => {
+      if (currentData) renderPlot();
+    });
+
+    document.getElementById('export-btn').addEventListener('click', () => {
+      const svg = document.getElementById('plot-svg');
+      const serializer = new XMLSerializer();
+      const svgStr = serializer.serializeToString(svg);
+      const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${currentGene}_expression.svg`;
+      link.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // ===========================================================================
+    // Initialize
+    // ===========================================================================
+
+    initDuckDB();
+  </script>
+</body>
+</html>
