@@ -765,7 +765,7 @@
 
           // Sort evo-devo groups by developmental order
           if (name === "Evo-devo") {
-            facetGroups.sort((a, b) => evoDevoOrder(a.key) - evoDevoOrder(b.key));
+            facetGroups.sort((a, b) => evoDevoOrder(a.plot_group) - evoDevoOrder(b.plot_group));
           }
 
           // Sort tumor groups based on selected option
