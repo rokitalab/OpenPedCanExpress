@@ -6,58 +6,27 @@ This directory should contain the OpenPedCan data release files needed to build 
 
 To run the preprocessing script (`scripts/01-build-expression-parquet.R`), place the following files in this directory:
 
-### From OpenPedCan/haydar-r01 data release:
+### From OpenPedCan data release:
 
 1. **histologies.tsv** — main histologies file with tumor and control metadata
-2. **gene-expression-rsem-tpm-collapsed.rds** — tumor TPM expression matrix
-3. **gtex_gene-expression-rsem-tpm-collapsed.rds** — GTEx TPM expression matrix
+2. **gene-expression-rsem-tpm-collapsed.rds** — tumor TPM expression matrix (PBTA, TARGET, GMKF, DGD)
+3. **gtex-harmonized-gene-expression-rsem-tpm-collapsed.brain-under40.rds** — GTEx brain TPM matrix (<40 years)
 4. **ped-normal-brain-gene-expression-rsem-tpm.all.rds** — pediatric normal brain TPM matrix
 5. **evodevo_gene-expression-rsem-tpm-collapsed.all.rds** — evo-devo TPM matrix
 6. **ped-normal-brain-histologies.tsv** — pediatric normal brain metadata
 7. **evodevo-histologies.tsv** — evo-devo metadata
-8. **gtex-samples-by-age.tsv** — GTEx age metadata (from `analyses/ADAM10-tumor-normal-expr/input/`)
-9. **independent-specimens.rnaseq.primary-plus-pre-release.tsv** — independent specimen list
+8. **gtex-samples-by-age.tsv** — GTEx age metadata
+9. **independent-specimens.rnaseqpanel.primary.tsv** — independent specimen list
+
+### From TAPESTRY preprocessing repository:
+
+10. **cohort-histologies.tsv** — TAPESTRY histologies with plot_group annotations
+    - Located at: `analyses/00-create-cohort-histologies/results/cohort-histologies.tsv`
+    - Repository: [TAPESTRY-data-preprocessing](https://github.com/d3b-center/TAPESTRY-data-preprocessing)
 
 ## How to obtain these files
 
-### Option 1: Copy from an existing haydar-r01 clone
-
-If you have the haydar-r01 repository cloned locally with data downloaded:
-
-```bash
-# From the OpenPedCanExpress root directory
-cp ../haydar-r01/data/histologies.tsv data/source/
-cp ../haydar-r01/data/gene-expression-rsem-tpm-collapsed.rds data/source/
-cp ../haydar-r01/data/gtex_gene-expression-rsem-tpm-collapsed.rds data/source/
-cp ../haydar-r01/data/ped-normal-brain-gene-expression-rsem-tpm.all.rds data/source/
-cp ../haydar-r01/data/evodevo_gene-expression-rsem-tpm-collapsed.all.rds data/source/
-cp ../haydar-r01/data/ped-normal-brain-histologies.tsv data/source/
-cp ../haydar-r01/data/evodevo-histologies.tsv data/source/
-cp ../haydar-r01/data/independent-specimens.rnaseq.primary-plus-pre-release.tsv data/source/
-cp ../haydar-r01/analyses/ADAM10-tumor-normal-expr/input/gtex-samples-by-age.tsv data/source/
-```
-
-### Option 2: Download directly from the data release
-
-```bash
-# Set the release URL and version
-URL="https://s3.amazonaws.com/bti-openaccess-us-east-1-bti-bfx/haydar-r01"
-RELEASE="v2"
-
-# Download files
-cd data/source
-curl -O $URL/$RELEASE/histologies.tsv
-curl -O $URL/$RELEASE/gene-expression-rsem-tpm-collapsed.rds
-curl -O $URL/$RELEASE/gtex_gene-expression-rsem-tpm-collapsed.rds
-curl -O $URL/$RELEASE/ped-normal-brain-gene-expression-rsem-tpm.all.rds
-curl -O $URL/$RELEASE/evodevo_gene-expression-rsem-tpm-collapsed.all.rds
-curl -O $URL/$RELEASE/ped-normal-brain-histologies.tsv
-curl -O $URL/$RELEASE/evodevo-histologies.tsv
-curl -O $URL/$RELEASE/independent-specimens.rnaseq.primary-plus-pre-release.tsv
-
-# GTEx age file requires cloning haydar-r01 or downloading separately
-# (it's in analyses/ subdirectory, not the main data release)
-```
+Contact the Rokita Lab or OpenPedCan data maintainers for access to the required source files.
 
 ## After placing files here
 
