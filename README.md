@@ -1,8 +1,8 @@
 # OpenPedCanExpress
 
-**Interactive browser-based tool for exploring gene expression across pediatric brain tumors and normal tissue controls**
+**Interactive browser-based tool for exploring gene expression across pediatric tumors and normal tissue controls**
 
-A lightweight, static web application for visualizing tumor vs. normal gene expression using RNA-seq TPM data from the [OpenPedCan project](https://github.com/PediatricOpenTargets/OpenPedCan-analysis). Built on DuckDB-WASM for client-side querying of genome-wide expression data without server infrastructure.
+A lightweight, static web application for visualizing tumor vs. normal gene expression using RNA-seq TPM data from the [OpenPedCan project](https://github.com/rokitalab/OpenPedCan-Project-CNH). Built on DuckDB-WASM for client-side querying of genome-wide expression data without server infrastructure.
 
 🔗 **[Live app](https://rokitalab.github.io/OpenPedCanExpress/)** (coming soon)
 
@@ -10,18 +10,21 @@ A lightweight, static web application for visualizing tumor vs. normal gene expr
 
 - **Genome-wide gene search** — query any gene across the full expression matrix
 - **Tumor vs. normal comparisons** — faceted box plots comparing:
-  - PBTA/OpenPedCan primary brain tumors (by histology and molecular subtype)
+  - Primary pediatric tumors from PBTA, TARGET, GMKF, and DGD cohorts (by histology and molecular subtype)
   - GTEx normal brain (<40 years old)
-  - Pediatric normal brain tissue
-  - Evo-devo developmental timepoints (forebrain/hindbrain)
-- **Interactive plots** — D3-based visualizations with per-sample tooltips, log₂ scale toggle, and publication-ready export (PNG/PDF/SVG/TIFF at 300 DPI)
+  - Pediatric normal brain tissue (Cerebellum, Cortex, Pituitary, Pons)
+  - Evo-devo developmental timepoints (4 weeks post-conception → elderly)
+  - Pediatric brain cell types
+- **TAPESTRY integration** — uses TAPESTRY plot groups and color scheme for consistent visualization across Rokita Lab tools
+- **Interactive plots** — D3-based visualizations with per-sample tooltips, log₂ scale toggle, and publication-ready export (PDF/JPG/PNG/SVG at 300 DPI)
+- **Configurable display** — filter by tumor cohort, histology, molecular subtype, and normal tissue groups
 - **Zero infrastructure** — fully static, runs entirely in-browser via DuckDB-WASM querying partitioned Parquet files
 
-## What's here
+## Repository structure
 
-- **`scripts/`** — R preprocessing pipeline to build long-format Parquet from OpenPedCan RDS matrices
 - **`public/`** — Static web app (HTML/JS, DuckDB-WASM, D3 plotting)
-- **`data/`** — Gitignored; holds preprocessed Parquet partitions (download separately or rebuild via `scripts/`)
+- **`scripts/`** — R preprocessing pipeline to build expression data from OpenPedCan source files
+- **`data/`** — Expression data in Parquet format (hosted on S3, not in this repo)
 
 ## Running locally
 
@@ -39,82 +42,23 @@ python -m http.server 8000
 npx http-server public -p 8000
 ```
 
-### Rebuilding the Parquet data from source
 
-Requires R and the following packages: `tidyverse`, `nanoparquet`, `jsonlite`
-
-1. **Download OpenPedCan data release** into `data/source/`:
-   ```bash
-   # Point to the haydar-r01 data release or download directly
-   # Expected files:
-   #   - histologies.tsv
-   #   - gene-expression-rsem-tpm-collapsed.rds (tumors)
-   #   - gtex_gene-expression-rsem-tpm-collapsed.rds
-   #   - ped-normal-brain-gene-expression-rsem-tpm.all.rds
-   #   - evodevo_gene-expression-rsem-tpm-collapsed.all.rds
-   #   - ped-normal-brain-histologies.tsv
-   #   - evodevo-histologies.tsv
-   #   - analyses/ADAM10-tumor-normal-expr/input/gtex-samples-by-age.tsv
-   ```
-
-2. **Run the preprocessing script**:
-   ```bash
-   Rscript scripts/01-build-expression-parquet.R
-   ```
-
-   This:
-   - Loads tumor + normal TPM matrices
-   - Filters for independent primary tumors, GTEx <40, etc.
-   - Reshapes to long format: `(gene_symbol, sample_id, tpm, cohort, histology, ...)`
-   - Partitions by gene-symbol range (A–D, E–H, etc.) to stay under GitHub's 100MB file limit
-   - Writes Parquet chunks to `data/partitions/` plus a JSON manifest
-
-3. **Generated files** (~500MB total):
-   ```
-   data/partitions/genes_A-H.parquet (244 MB)
-   data/partitions/genes_I-P.parquet (113 MB)
-   data/partitions/genes_Q-Z.parquet (120 MB)
-   data/partitions/manifest.json
-   ```
-
-## Deployment
-
-### 1. Upload Parquet files to S3
-
-The Parquet files are too large for GitHub (>100MB each), so they're hosted on S3:
-
-```bash
-# Upload to your S3 bucket
-aws s3 cp data/partitions/genes_A-H.parquet s3://YOUR-BUCKET/openpedcanexpress/ --acl public-read
-aws s3 cp data/partitions/genes_I-P.parquet s3://YOUR-BUCKET/openpedcanexpress/ --acl public-read
-aws s3 cp data/partitions/genes_Q-Z.parquet s3://YOUR-BUCKET/openpedcanexpress/ --acl public-read
-```
-
-Then update `public/index.html` line 282 with your bucket URL:
-```javascript
-const S3_BUCKET_URL = 'https://YOUR-BUCKET.s3.amazonaws.com/openpedcanexpress';
-```
-
-### 2. Deploy web app to GitHub Pages
-
-The web app (HTML/JS) is hosted on GitHub Pages, auto-deployed via GitHub Actions on push to `main`.
-
-Or deploy manually:
-```bash
-# Commit changes and push (this triggers GitHub Actions deployment)
-git push origin main
-```
-
-The GitHub Actions workflow (`.github/workflows/deploy.yml`) automatically deploys the `public/` directory to GitHub Pages.
 
 ## Data provenance
 
 All expression data sourced from:
-- **OpenPedCan** — [PediatricOpenTargets/OpenPedCan-analysis](https://github.com/PediatricOpenTargets/OpenPedCan-analysis)
+- **OpenPedCan** — [rokitalab/OpenPedCan-Project-CNH](https://github.com/rokitalab/OpenPedCan-Project-CNH)
 - **PBTA** (Pediatric Brain Tumor Atlas) — primary tumor cohort
+- **TARGET** — Therapeutically Applicable Research to Generate Effective Treatments
+- **GMKF** — Gabriella Miller Kids First
+- **DGD** — Developmental Genome Disorders
 - **GTEx** — adult normal brain, filtered to <40 years
-- **Evo-devo** — developmental brain (forebrain/hindbrain timepoints)
-- **Pediatric normal brain** — non-neoplastic pediatric tissue
+- **Evo-devo** — developmental brain (4 weeks post-conception through elderly)
+- **Pediatric normal brain** — non-neoplastic pediatric tissue (Cerebellum, Cortex, Pituitary, Pons)
+- **Pediatric brain cell types** — single-cell derived cell type references
+
+Tumor histologies and plot groups sourced from:
+- **TAPESTRY** — [tapestry.rokitalab.com](https://tapestry.rokitalab.com)
 
 See `data/release-notes.md` (generated by preprocessing script) for version info and sample counts.
 
@@ -132,11 +76,17 @@ D3.js renders faceted box plots (tumor histologies | normal cohorts)
 
 No backend, no database server, no compute — the browser does all the work.
 
+## Author
+
+**Jo Lynne Rokita, PhD**  
+Rokita Lab  
+[rokitalab.com](https://rokitalab.com)
+
 ## Acknowledgments
 
-- Inspired by [TAPESTRY](https://tapestry.rokitalab.com) (Rokita Lab's tumor-enriched junction viewer)
+- Color scheme and plot groups from [TAPESTRY](https://tapestry.rokitalab.com) (Rokita Lab)
 - Built on [DuckDB-WASM](https://github.com/duckdb/duckdb-wasm) and [D3.js](https://d3js.org)
-- OpenPedCan data provided by the Pediatric Open Targets collaboration
+- Data from [OpenPedCan](https://github.com/rokitalab/OpenPedCan-Project-CNH)
 
 ## License
 
