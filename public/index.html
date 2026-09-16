@@ -372,6 +372,18 @@
       </div>
 
       <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <label for="export-box-width" style="font-weight: 600; color: #666;" title="Pixel width per group; lower to compress a plot with many groups">Box width:</label>
+        <input type="number" id="export-box-width" value="65" min="20" max="200" step="5"
+               style="width: 64px; padding: 0.5rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px;" />
+        <label for="export-height" style="font-weight: 600; color: #666;">Height:</label>
+        <input type="number" id="export-height" value="500" min="200" max="1200" step="20"
+               style="width: 72px; padding: 0.5rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px;" />
+        <label for="export-font-size" style="font-weight: 600; color: #666;">Font size:</label>
+        <input type="number" id="export-font-size" value="14" min="8" max="28" step="1"
+               style="width: 56px; padding: 0.5rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px;" />
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
         <select id="export-format" style="padding: 0.75rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px; cursor: pointer;">
           <option value="pdf">PDF</option>
           <option value="jpg">JPG (300 DPI)</option>
@@ -641,7 +653,7 @@
     // D3 Box Plot Rendering (TAPESTRY-style with faceting)
     // ===========================================================================
 
-    const MARGIN = { top: 20, right: 20, bottom: 200, left: 140 };
+    const MARGIN = { top: 20, right: 20, bottom: 240, left: 170 };
     const FACET_GAP = 16;
     const FACET_STRIP_H = 20;
 
@@ -666,23 +678,23 @@
       return (Math.abs(hash) % 1000) / 1000 - 0.5;
     }
 
-    function renderPlot() {
-      if (!currentData || currentData.length === 0) return;
+    // Reference font size the base MARGIN was tuned for; margins scale with
+    // the user-chosen export font size relative to this.
+    const BASE_FONT_SIZE = 14;
 
-      const log2Scale = document.getElementById('log2-toggle').checked;
-      const svg = d3.select('#plot-svg');
+    function marginForFontSize(fontSize) {
+      const s = fontSize / BASE_FONT_SIZE;
+      return {
+        top: MARGIN.top,
+        right: MARGIN.right,
+        bottom: Math.round(MARGIN.bottom * s),
+        left: Math.round(MARGIN.left * s)
+      };
+    }
 
-      // Make plot responsive to container width
-      const container = document.querySelector('.plot-container');
-      const width = Math.min(1400, container.clientWidth);
-      const height = 500;
-
-      svg.attr('width', width).attr('height', height);
-      svg.selectAll('*').remove();
-
-      const iW = width - MARGIN.left - MARGIN.right;
-      const iH = height - MARGIN.top - MARGIN.bottom - FACET_STRIP_H;
-
+    // Computes the grouped/faceted data (width-independent). Shared by the
+    // on-screen render and the export render so both stay in sync.
+    function computeFacetBuckets(log2Scale) {
       // Transform TPM values
       const xform = (tpm) => log2Scale ? Math.log2(tpm + 1) : tpm;
 
@@ -799,6 +811,26 @@
         })
         .filter((f) => f.groups.length > 0);
 
+      return { facetBuckets, groups };
+    }
+
+    // Draws the chart into `svg` at the given pixel size, given already-computed
+    // facetBuckets/groups (from computeFacetBuckets). Used for both the on-screen
+    // render and the (independently sized) export render.
+    function drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize = BASE_FONT_SIZE) {
+      const xform = (tpm) => log2Scale ? Math.log2(tpm + 1) : tpm;
+      const margin = marginForFontSize(fontSize);
+      const xTickSize = fontSize;
+      const yTickSize = fontSize + 2;
+      const facetLabelSize = fontSize + 1;
+      const axisTitleSize = fontSize + 4;
+
+      svg.attr('width', width).attr('height', height);
+      svg.selectAll('*').remove();
+
+      const iW = width - margin.left - margin.right;
+      const iH = height - margin.top - margin.bottom - FACET_STRIP_H;
+
       // Y scale (shared across facets)
       const allVals = currentData.map(d => xform(d.tpm));
       const yMax = d3.max(allVals) ?? 1;
@@ -821,7 +853,7 @@
       });
 
       const root = svg.append('g')
-        .attr('transform', `translate(${MARGIN.left},${MARGIN.top + FACET_STRIP_H})`);
+        .attr('transform', `translate(${margin.left},${margin.top + FACET_STRIP_H})`);
 
       // Grid lines
       root.append('g')
@@ -830,16 +862,20 @@
         .call(g => g.selectAll('line').attr('stroke', '#e0e0e0').attr('stroke-dasharray', '3,3'));
 
       // Y axis
-      root.append('g').call(d3.axisLeft(y));
+      root.append('g')
+        .call(d3.axisLeft(y))
+        .selectAll('text')
+        .style('font-size', `${yTickSize}px`);
 
       // Y axis label
       root.append('text')
         .attr('transform', 'rotate(-90)')
         .attr('x', -iH / 2)
-        .attr('y', -60)
+        .attr('y', -(margin.left - 110))
         .attr('text-anchor', 'middle')
-        .attr('font-size', 14)
-        .style('fill', '#666')
+        .attr('font-size', axisTitleSize)
+        .attr('font-weight', 600)
+        .style('fill', '#000')
         .text(log2Scale ? 'log₂(TPM + 1)' : 'TPM');
 
       // Facet strip labels (TAPESTRY-style with underline)
@@ -853,7 +889,7 @@
           .attr('x', facetX + facetW / 2)
           .attr('y', -FACET_STRIP_H / 2 - 2)
           .attr('text-anchor', 'middle')
-          .attr('font-size', 13)
+          .attr('font-size', facetLabelSize)
           .attr('font-weight', 600)
           .attr('fill', '#333')
           .text(f.name);
@@ -877,7 +913,7 @@
           .selectAll('text')
           .attr('transform', 'rotate(-45)')
           .style('text-anchor', 'end')
-          .style('font-size', '11px')
+          .style('font-size', `${xTickSize}px`)
           .attr('dx', '-0.8em')
           .attr('dy', '0.5em');
       });
@@ -954,9 +990,47 @@
             .on('mouseout', hideTooltip);
         });
       });
+    }
+
+    function renderPlot() {
+      if (!currentData || currentData.length === 0) return;
+
+      const log2Scale = document.getElementById('log2-toggle').checked;
+      const { facetBuckets, groups } = computeFacetBuckets(log2Scale);
+
+      // Make plot responsive to container width
+      const container = document.querySelector('.plot-container');
+      const width = Math.min(1400, container.clientWidth);
+      const height = 500;
+
+      const svg = d3.select('#plot-svg');
+      drawChart(svg, width, height, facetBuckets, groups, log2Scale);
 
       // Update title
       document.getElementById('plot-title').textContent = `${currentGene} Expression`;
+    }
+
+    // Builds an off-screen SVG sized from the user's box width/height/font size
+    // controls, so the user can compress or expand the export directly instead
+    // of relying on an automatic heuristic. Returns the detached <svg> DOM node
+    // plus its pixel dimensions.
+    function buildExportSvg() {
+      const log2Scale = document.getElementById('log2-toggle').checked;
+      const { facetBuckets, groups } = computeFacetBuckets(log2Scale);
+
+      const boxWidth = parseFloat(document.getElementById('export-box-width').value) || 65;
+      const height = parseFloat(document.getElementById('export-height').value) || 500;
+      const fontSize = parseFloat(document.getElementById('export-font-size').value) || BASE_FONT_SIZE;
+
+      const groupCount = groups.length;
+      const margin = marginForFontSize(fontSize);
+      const facetGapTotal = FACET_GAP * Math.max(0, facetBuckets.length - 1);
+      const width = margin.left + margin.right + facetGapTotal + groupCount * boxWidth;
+
+      const svg = d3.create('svg').attr('xmlns', 'http://www.w3.org/2000/svg');
+      drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize);
+
+      return { node: svg.node(), width, height };
     }
 
     // ===========================================================================
@@ -1355,8 +1429,10 @@
     });
 
     document.getElementById('export-btn').addEventListener('click', () => {
+      if (!currentData || currentData.length === 0) return;
+
       const format = document.getElementById('export-format').value;
-      const svg = document.getElementById('plot-svg');
+      const svg = buildExportSvg().node;
       const gene = currentGene || 'plot';
 
       if (format === 'svg') {
@@ -1399,8 +1475,8 @@
       // Add minimal padding to ensure rotated labels aren't cut off
       const extraPadding = 20; // Minimal padding for edges
 
-      // Scale for 300 DPI (assuming 96 DPI screen, scale by ~3.125)
-      const scale = format === 'pdf' ? 2 : 3.125;
+      // Scale for 300 DPI (assuming 96 DPI screen, scale by ~3.125) for every raster/PDF format
+      const scale = 3.125;
       canvas.width = (svgWidth + extraPadding) * scale;
       canvas.height = (svgHeight + extraPadding) * scale;
 
@@ -1421,7 +1497,7 @@
 
         if (format === 'pdf') {
           // Export as PDF using jsPDF
-          exportAsPDF(canvas, gene, svgWidth, svgHeight);
+          exportAsPDF(canvas, gene);
         } else {
           // Export as PNG or JPG
           const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
@@ -1441,20 +1517,20 @@
       img.src = url;
     }
 
-    function exportAsPDF(canvas, gene, width, height) {
+    function exportAsPDF(canvas, gene) {
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
       // Use jsPDF for proper PDF export
       const { jsPDF } = window.jspdf;
 
-      // Calculate PDF dimensions in mm (maintaining aspect ratio)
-      // Use actual canvas dimensions for proper aspect ratio
-      const canvasAspect = canvas.height / canvas.width;
-      const pdfWidth = 297; // A4 width in mm (landscape)
-      const pdfHeight = pdfWidth * canvasAspect;
+      // Size the PDF page to the chart's actual physical size at 300 DPI,
+      // rather than stretching it to fill a fixed page size like A4.
+      const dpi = 300;
+      const pdfWidth = (canvas.width / dpi) * 25.4;
+      const pdfHeight = (canvas.height / dpi) * 25.4;
 
       const pdf = new jsPDF({
-        orientation: pdfWidth > pdfHeight ? 'landscape' : 'portrait',
+        orientation: pdfWidth >= pdfHeight ? 'landscape' : 'portrait',
         unit: 'mm',
         format: [pdfWidth, pdfHeight]
       });
