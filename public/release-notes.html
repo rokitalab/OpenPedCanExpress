@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Release notes — OpenPedCanExpress</title>
+  <link rel="stylesheet" href="docs-style.css">
+</head>
+<body>
+  <div class="container">
+    <nav class="site-nav">
+      <a class="brand" href="./">OpenPedCanExpress</a>
+      <a href="./">Expression Plots</a>
+      <a href="docs.html">Docs</a>
+      <a class="active" href="release-notes.html">Release notes</a>
+    </nav>
+
+    <h1>Release notes</h1>
+    <p class="lead">What changed in each OpenPedCanExpress release. The code is on
+      <a href="https://github.com/rokitalab/OpenPedCanExpress" target="_blank" rel="noopener">GitHub</a>.</p>
+
+    <div class="toc">
+      <strong>Jump to</strong>
+      <p id="jump"></p>
+    </div>
+
+    <div id="releases"></div>
+
+    <footer>
+      <p>
+        Data from <a href="https://github.com/rokitalab/OpenPedCan-Project-CNH" target="_blank" rel="noopener">OpenPedCan</a> ·
+        <a href="https://github.com/rokitalab/OpenPedCanExpress" target="_blank" rel="noopener">Source on GitHub</a>
+      </p>
+    </footer>
+  </div>
+
+  <script type="module">
+    import { RELEASES } from './releases.js';
+
+    const el = (tag, props = {}, ...kids) => {
+      const node = Object.assign(document.createElement(tag), props);
+      kids.forEach((k) => node.append(k));
+      return node;
+    };
+
+    // Render `backticked` text as <code>
+    const rich = (text) => {
+      const frag = document.createDocumentFragment();
+      text.split('`').forEach((part, i) => {
+        if (!part) return;
+        frag.append(i % 2 ? el('code', { textContent: part }) : part);
+      });
+      return frag;
+    };
+
+    const jump = document.getElementById('jump');
+    RELEASES.forEach((r, i) => {
+      if (i > 0) jump.append(' · ');
+      jump.append(el('a', { href: `#${r.version}`, textContent: r.version }));
+    });
+
+    const root = document.getElementById('releases');
+    RELEASES.forEach((r) => {
+      const head = el('div', { className: 'release-head' }, el('h2', { textContent: r.version }));
+      if (r.date) head.append(el('span', { className: 'release-date', textContent: r.date }));
+      if (r.current) head.append(el('span', { className: 'badge', textContent: 'Current' }));
+
+      const section = el('section', { className: 'release', id: r.version }, head);
+      if (r.summary) section.append(el('p', {}, rich(r.summary)));
+      if (r.changes) {
+        section.append(el('h3', { textContent: 'What changed' }));
+        section.append(el('ul', {}, ...r.changes.map((c) => el('li', {}, rich(c)))));
+      }
+      root.append(section);
+    });
+  </script>
+</body>
+</html>

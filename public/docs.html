@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documentation — OpenPedCanExpress</title>
+  <link rel="stylesheet" href="docs-style.css">
+</head>
+<body>
+  <div class="container">
+    <nav class="site-nav">
+      <a class="brand" href="./">OpenPedCanExpress</a>
+      <a href="./">Expression Plots</a>
+      <a class="active" href="docs.html">Docs</a>
+      <a href="release-notes.html">Release notes</a>
+    </nav>
+
+    <h1>Documentation</h1>
+    <p class="lead">OpenPedCanExpress is a browser-based tool for exploring gene expression in
+      pediatric tumors compared with normal tissue controls. Search a gene, compare its expression
+      across tumor histologies and normal samples, and export publication-ready plots.</p>
+
+    <div class="toc">
+      <strong>Contents</strong>
+      <ul>
+        <li><a href="#quick-start">Quick start</a></li>
+        <li><a href="#plot">Reading the plot</a></li>
+        <li><a href="#configure">Configuring sample groups</a></li>
+        <li><a href="#export">Exporting plots</a></li>
+        <li><a href="#data">The underlying data</a></li>
+        <li><a href="#groups">Plot groups</a></li>
+        <li><a href="#glossary">Glossary</a></li>
+        <li><a href="#cite">Citing and contact</a></li>
+      </ul>
+    </div>
+
+    <h2 id="quick-start">Quick start</h2>
+    <ol>
+      <li>Type a gene symbol (for example <code>EGFR</code>, <code>TP53</code>, or <code>CD276</code>) and press Enter.</li>
+      <li>The plot shows expression for each tumor and normal group, with one box per group.</li>
+      <li>Use <code>Configure Groups</code> to choose which cohorts, histologies, molecular subtypes, and normal tissues to show.</li>
+      <li>Optional: customize the export by setting the plot width (<code>Box width</code>), <code>Height</code>, <code>Font size</code>, and file type (PDF, JPG, PNG, or SVG).</li>
+      <li>Use <code>Export Plot</code> to save the figure.</li>
+    </ol>
+    <p>The first load takes a few seconds while the database engine starts. After that, each gene search only downloads the rows for that gene.</p>
+
+    <h2 id="plot">Reading the plot</h2>
+    <ul>
+      <li><strong>Facets.</strong> Groups are arranged in facets: tumor cohorts first (<code>PBTA</code>, <code>TARGET</code>, <code>GMKF</code>), then normal controls (Pediatric Brain, Evo-devo, GTEx &lt;40). Facet widths are proportional to the number of groups.</li>
+      <li><strong>Boxes.</strong> Each box spans the first to third quartile with a line at the median. Whiskers extend to the most extreme values within 1.5 × the interquartile range of the box.</li>
+      <li><strong>Points.</strong> Every sample is drawn as a point, jittered horizontally so overlapping samples stay visible. Hover over a point to see its sample ID and value.</li>
+      <li><strong>Y-axis.</strong> By default, values are log<sub>2</sub>(TPM + 1). Uncheck the <code>log₂ scale</code> option to see raw TPM. The y-axis is shared across all facets so groups can be compared directly.</li>
+      <li><strong>Sorting.</strong> Tumor groups can be sorted alphabetically or by median expression (high to low, or low to high). Evo-devo groups are always in developmental order.</li>
+    </ul>
+
+    <h2 id="configure">Configuring sample groups</h2>
+    <p>Open <code>Configure Groups</code> to choose what is plotted.</p>
+    <ul>
+      <li><code>Cohorts</code>. The default view shows <code>PBTA</code> only. Select <code>TARGET</code> or <code>GMKF</code> to add them; each appears in its own facet. They are off by default because they add many groups.</li>
+      <li><code>Histologies</code>. Tumor groups, listed under their cohort heading.</li>
+      <li><code>Molecular subtypes</code>. Select subtypes to plot those samples separately. <code>Split by molecular subtype</code> divides every tumor group by subtype.</li>
+      <li><code>Control cohorts</code>. Choose GTEx, Evo-devo, and pediatric normal brain groups.</li>
+    </ul>
+    <p>Click <code>Apply</code> to update the plot.</p>
+
+    <h2 id="export">Exporting plots</h2>
+    <p>Choose a format (PDF, JPG, PNG, or SVG; raster images are 300 DPI) and click <code>Export Plot</code>. The export is drawn independently of the on-screen plot, so you can set:</p>
+    <ul>
+      <li><code>Box width</code>: pixels per group, which sets the figure width.</li>
+      <li><code>Height</code> of the figure.</li>
+      <li><code>Font size</code>: margins scale with it so labels are not clipped.</li>
+    </ul>
+
+    <h2 id="data">The underlying data</h2>
+    <p>Expression values are RSEM TPM, collapsed to gene symbol, from the
+      <a href="https://github.com/rokitalab/OpenPedCan-Project-CNH" target="_blank" rel="noopener">OpenPedCan project</a>
+      (OpenPedCan v15 data release).
+      All data, tumor and control, was harmonized with the Gabriella Miller Kids First RNA-Seq workflow using the GENCODE v39 reference, so expression values are comparable across cohorts.
+      A preprocessing script (<code>scripts/01-build-expression-parquet.R</code>) converts them into Parquet files split by the first letter of the gene symbol (A–H, I–P, Q–Z). The app queries these files in the browser with DuckDB-WASM, so there is no server or database.</p>
+
+    <h3>Tumor samples</h3>
+    <ul>
+      <li>RNA-Seq tumor samples from the <code>PBTA</code>, <code>TARGET</code>, and <code>GMKF</code> cohorts.</li>
+      <li>Only independent primary specimens are used (one per participant within each cohort), from the OpenPedCan independent specimens list for each cohort.</li>
+      <li><code>PBTA</code> neuroblastoma specimens are excluded.</li>
+    </ul>
+
+    <h3>Normal controls</h3>
+    <table>
+      <tr><th>Control</th><th>Description</th><th>Data access</th></tr>
+      <tr><td>GTEx &lt;40</td><td>GTEx brain regions, donors aged 20–39</td>
+        <td><a href="https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=phs000424.v11.p2" target="_blank" rel="noopener">dbGaP phs000424</a></td></tr>
+      <tr><td>Pediatric Brain</td><td>Non-neoplastic pediatric tissue: Cerebellum, Cortex, Pituitary, Pons</td>
+        <td><a href="https://www.ncbi.nlm.nih.gov/bioproject/PRJNA1019377" target="_blank" rel="noopener">BioProject PRJNA1019377</a></td></tr>
+      <tr><td>Evo-devo</td><td>Developmental brain from 4 weeks post-conception through elderly</td>
+        <td><a href="https://www.ebi.ac.uk/biostudies/arrayexpress/studies/E-MTAB-6814" target="_blank" rel="noopener">ArrayExpress E-MTAB-6814</a></td></tr>
+    </table>
+    <p>The same control cohorts are used in <a href="https://tapestry.rokitalab.com" target="_blank" rel="noopener">TAPESTRY</a>.</p>
+
+    <h2 id="groups">Plot groups</h2>
+    <ul>
+      <li><code>PBTA</code>. Histology groups come from <a href="https://tapestry.rokitalab.com" target="_blank" rel="noopener">TAPESTRY</a>, so colors and groups match across Rokita Lab tools.</li>
+      <li><code>TARGET</code> and <code>GMKF</code>. Samples are grouped by OpenPedCan <code>cancer_group</code>. Groups with 3 or fewer samples are not shown, and <code>Ganglioneuroblastoma</code> is combined with <code>Neuroblastoma</code>. The mapping is in <code>plot-groups.tsv</code>.</li>
+    </ul>
+
+    <h2 id="glossary">Glossary</h2>
+    <table>
+      <tr><th>Term</th><th>Meaning</th></tr>
+      <tr><td>TPM</td><td>Transcripts per million, a within-sample normalized expression value</td></tr>
+      <tr><td>log<sub>2</sub>(TPM + 1)</td><td>TPM on a log scale; the +1 keeps zero values defined</td></tr>
+      <tr><td><code>PBTA</code></td><td>Pediatric Brain Tumor Atlas cohort</td></tr>
+      <tr><td><code>TARGET</code></td><td>Therapeutically Applicable Research to Generate Effective Treatments</td></tr>
+      <tr><td><code>GMKF</code></td><td>Gabriella Miller Kids First</td></tr>
+      <tr><td>GTEx</td><td>Genotype-Tissue Expression project (normal tissue)</td></tr>
+      <tr><td>Independent specimen</td><td>One representative specimen per participant, so no participant is counted more than once</td></tr>
+      <tr><td>Plot group</td><td>The category a sample is plotted under (a histology or a normal tissue)</td></tr>
+    </table>
+
+    <h2 id="cite">Citing and contact</h2>
+    <p>OpenPedCanExpress is developed by the <a href="https://rokitalab.com" target="_blank" rel="noopener">Rokita Lab</a>. Please also cite
+      <a href="https://github.com/rokitalab/OpenPedCan-Project-CNH" target="_blank" rel="noopener">OpenPedCan</a> for the underlying data.
+      Questions and bug reports are welcome as <a href="https://github.com/rokitalab/OpenPedCanExpress/issues" target="_blank" rel="noopener">GitHub issues</a>.</p>
+    <p>See the <a href="release-notes.html">release notes</a> for what changed in each release.</p>
+
+    <footer>
+      <p>
+        Data from <a href="https://github.com/rokitalab/OpenPedCan-Project-CNH" target="_blank" rel="noopener">OpenPedCan</a> ·
+        <a href="https://github.com/rokitalab/OpenPedCanExpress" target="_blank" rel="noopener">Source on GitHub</a>
+      </p>
+    </footer>
+  </div>
+</body>
+</html>

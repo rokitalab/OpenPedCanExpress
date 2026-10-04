@@ -47,3 +47,26 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# ==============================================================================
+# OpenPedCanExpress-specific ignores
+# ==============================================================================
+
+# Data files (large, not committed to git)
+data/source/
+data/partitions/*.parquet
+data/partitions/manifest.json
+
+# Keep directory structure but ignore contents
+!data/.gitignore
+!data/partitions/.gitignore
+
+# Node modules if we add any build tooling later
+node_modules/
+
+# Mac OS
+.DS_Store
+
+# Editor directories
+.vscode/
+.idea/
