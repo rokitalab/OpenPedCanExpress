@@ -1,35 +1,14 @@
-version: '3.8'
-
+# Rebuilds the Parquet expression files from the OpenPedCan source data.
+# Runs on any machine with Docker; see docker-README.md.
+#
+#   docker compose up --build
 services:
   preprocessing:
     build: .
     image: openpedcanexpress-preprocessing:latest
     container_name: openpedcanexpress-build
-
-    # Allocate sufficient memory for multi-cohort processing
-    # Adjust based on your EC2 instance size
-    deploy:
-      resources:
-        limits:
-          memory: 64G
-        reservations:
-          memory: 48G
-
-    # Mount data directories
     volumes:
-      # Source data (read-only)
+      # Source data (read-only); see data/source/README.md for the file list
       - ./data/source:/app/data/source:ro
-
-      # Output directory (read-write)
+      # Output: Parquet files and manifest.json are written here
       - ./data/partitions:/app/data/partitions
-
-      # TAPESTRY histologies (read-only)
-      # Update path to your TAPESTRY repo location
-      - ../TAPESTRY-data-preprocessing:/tapestry:ro
-
-    # Set environment variables if needed
-    environment:
-      - R_MAX_VSIZE=64Gb
-
-    # Override command if you want to run a different script
-    # command: Rscript scripts/03-partition-only.R

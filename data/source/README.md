@@ -16,11 +16,13 @@ To run the preprocessing script (`scripts/01-build-expression-parquet.R`), place
 6. **ped-normal-brain-histologies.tsv** — pediatric normal brain metadata
 7. **evodevo-histologies.tsv** — evo-devo metadata
 8. **gtex-samples-by-age.tsv** — GTEx age metadata
-9. **independent-specimens.rnaseqpanel.primary.tsv** — independent specimen list
+9. **independent-specimens.rnaseqpanel.primary.eachcohort.tsv** — independent specimen list (RNA-Seq specimens are used)
+10. **pbta-plot-groups-v1.tsv** — PBTA plot groups from the v1 build (`sample_id`, `plot_group`)
+11. **molecular-subtype-overrides.tsv** — manual `molecular_subtype` corrections (`sample_id`, `molecular_subtype`)
 
 ### From TAPESTRY preprocessing repository:
 
-10. **cohort-histologies.tsv** — TAPESTRY histologies with plot_group annotations
+12. **cohort-histologies.tsv** — TAPESTRY histologies with plot_group annotations
     - Located at: `analyses/00-create-cohort-histologies/results/cohort-histologies.tsv`
     - Repository: [TAPESTRY-data-preprocessing](https://github.com/d3b-center/TAPESTRY-data-preprocessing)
 

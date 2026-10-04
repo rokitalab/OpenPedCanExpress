@@ -18,6 +18,15 @@ export const HISTOLOGY_COLORS = {
   "Other high-grade glioma":          "#ffccf5",
   "Other tumor":                      "#b5b5b5",
   "Schwannoma":                       "#ab7200",
+
+  // Non-CNS tumor groups from TARGET and GMKF (cancer_group)
+  "Acute Lymphoblastic Leukemia":     "#d62728",
+  "Acute Myeloid Leukemia":           "#8c1c13",
+  "Neuroblastoma":                    "#ff7f0e",
+  "Wilms tumor":                      "#17a2b8",
+  "Rhabdoid tumor of the kidney":     "#1f4e79",
+  "Clear cell sarcoma of the kidney": "#7fcdd8",
+  "Osteosarcoma":                     "#556b2f",
 };
 
 export const CONTROL_COHORT_COLORS = {
@@ -52,7 +61,9 @@ export const COHORT_FACET_NAMES = {
 };
 
 export const FACET_ORDER = [
-  "Primary Tumors",
+  "PBTA",
+  "TARGET",
+  "GMKF",
   "Cell of Origin",
   "Evo-devo",
   "Pediatric Brain",
@@ -87,7 +98,8 @@ export const EVODEVO_ORDER = [
 ];
 
 export function facetName(group) {
-  if (group.is_tumor && !group.is_cell_line) return "Primary Tumors";
+  // Tumor facets are named for their cohort (PBTA, TARGET, GMKF).
+  if (group.is_tumor && !group.is_cell_line) return group.cohort || "PBTA";
   if (group.is_cell_line) return "Cell Lines";
   return COHORT_FACET_NAMES[group.source_cohort] ?? "Other";
 }

@@ -59,9 +59,11 @@ message("\n[1/6] Loading metadata...")
 # Load both histologies files:
 # - TAPESTRY cohort-histologies.tsv for tumor plot_group
 # - OpenPedCan histologies.tsv for GTEx metadata
-tapestry_repo <- "/Users/jrokita/Documents/GitHub/tumor-enriched-splicing"
+# Expected at data/source/cohort-histologies.tsv (copy from the TAPESTRY
+# tumor-enriched-splicing repo:
+# analyses/00-create-cohort-histologies/results/cohort-histologies.tsv).
 tapestry_histologies <- read_tsv(
-  file.path(tapestry_repo, "analyses/00-create-cohort-histologies/results/cohort-histologies.tsv"),
+  file.path(source_dir, "cohort-histologies.tsv"),
   show_col_types = FALSE
 )
 
@@ -71,12 +73,16 @@ openpedcan_histologies <- read_tsv(
   show_col_types = FALSE
 )
 
-# Independent specimens (primary tumors only)
+# Independent specimens (primary tumors only, RNA-Seq only; one specimen per
+# participant within each cohort)
 independent_specimens <- read_tsv(
-  file.path(source_dir, "independent-specimens.rnaseqpanel.primary.tsv"),
+  file.path(source_dir, "independent-specimens.rnaseqpanel.primary.eachcohort.tsv"),
   show_col_types = FALSE
 ) %>%
-  filter(tumor_descriptor %in% c("Initial CNS Tumor", "Primary Tumor")) %>%
+  filter(
+    experimental_strategy == "RNA-Seq",
+    tumor_descriptor %in% c("Initial CNS Tumor", "Primary Tumor")
+  ) %>%
   pull(Kids_First_Biospecimen_ID)
 
 # GTEx age metadata (to filter <40 years)
@@ -143,7 +149,10 @@ tumor_metadata_opc <- openpedcan_histologies %>%
   filter(
     sample_type == "Tumor",
     experimental_strategy == "RNA-Seq",
-    cohort %in% c("PBTA", "TARGET", "GMKF", "DGD")
+    cohort %in% c("PBTA", "TARGET", "GMKF", "DGD"),
+    Kids_First_Biospecimen_ID %in% independent_specimens,
+    # Exclude neuroblastoma specimens from the PBTA cohort
+    !(cohort == "PBTA" & str_starts(coalesce(molecular_subtype, ""), "NBL, "))
   ) %>%
   select(
     sample_id = Kids_First_Biospecimen_ID,
@@ -155,16 +164,41 @@ tumor_metadata_opc <- openpedcan_histologies %>%
     cancer_group,
     RNA_library,
     primary_site
-  )
+  ) %>%
+  # Manual molecular_subtype corrections (e.g. unclassified MYCN status)
+  left_join(
+    read_tsv(
+      file.path(source_dir, "molecular-subtype-overrides.tsv"),
+      show_col_types = FALSE
+    ) %>% rename(molecular_subtype_override = molecular_subtype),
+    by = "sample_id"
+  ) %>%
+  mutate(
+    molecular_subtype = coalesce(molecular_subtype_override, molecular_subtype)
+  ) %>%
+  select(-molecular_subtype_override)
+
+# PBTA plot groups: the v1 build's plot groups take precedence so the PBTA view
+# stays as published; the current TAPESTRY plot_group fills in the rest.
+pbta_plot_groups_v1 <- read_tsv(
+  file.path(source_dir, "pbta-plot-groups-v1.tsv"),
+  show_col_types = FALSE
+) %>%
+  select(sample_id, plot_group_v1 = plot_group)
+pbta_group_names_v1 <- unique(pbta_plot_groups_v1$plot_group_v1)
 
 tumor_metadata_tapestry <- tapestry_histologies %>%
   select(
     sample_id = Kids_First_Biospecimen_ID,
     plot_group_tapestry = plot_group
-  )
+  ) %>%
+  full_join(pbta_plot_groups_v1, by = "sample_id") %>%
+  mutate(plot_group_tapestry = coalesce(plot_group_v1, plot_group_tapestry)) %>%
+  select(sample_id, plot_group_tapestry)
 
-# Process cohorts one at a time
-tumor_parts <- list()
+# Process cohorts one at a time. Each cohort is written to its own temp file
+# (not bound together in memory) to keep peak memory low.
+temp_tumor_files <- character()
 for (cohort_name in c("PBTA", "TARGET", "GMKF", "DGD")) {
   tryCatch({
     message("  Processing ", cohort_name, "...")
@@ -198,7 +232,14 @@ for (cohort_name in c("PBTA", "TARGET", "GMKF", "DGD")) {
       left_join(tumor_metadata_tapestry, by = "sample_id") %>%
       mutate(
         source_cohort = cohort,
-        plot_group = coalesce(plot_group_tapestry, short_histology),
+        # PBTA: only samples with a PBTA plot group are kept (no short_histology
+        # fallback). Other cohorts fall back to short_histology; the app replaces
+        # those with cancer_group from plot-groups.tsv.
+        plot_group = if_else(
+          cohort == "PBTA",
+          plot_group_tapestry,
+          coalesce(plot_group_tapestry, short_histology)
+        ),
         plot_group = case_when(
           plot_group == "DIPG or DMG" ~ "Diffuse midline glioma",
           TRUE ~ plot_group
@@ -206,10 +247,15 @@ for (cohort_name in c("PBTA", "TARGET", "GMKF", "DGD")) {
         is_tumor = TRUE,
         is_control = FALSE
       ) %>%
-      select(-plot_group_tapestry)
+      select(-plot_group_tapestry) %>%
+      filter(!is.na(plot_group)) %>%
+      # PBTA: only plot groups that existed in the v1 build
+      filter(cohort != "PBTA" | plot_group %in% c(pbta_group_names_v1, "Diffuse midline glioma"))
 
     message("    Complete: ", format(nrow(cohort_long), big.mark=","), " rows")
-    tumor_parts[[cohort_name]] <- cohort_long
+    temp_file <- file.path(output_dir, paste0("_temp_tumor_", cohort_name, ".rds"))
+    saveRDS(cohort_long, temp_file)
+    temp_tumor_files <- c(temp_tumor_files, temp_file)
     rm(cohort_long)
     gc(verbose=FALSE)
   }, error = function(e) {
@@ -217,19 +263,7 @@ for (cohort_name in c("PBTA", "TARGET", "GMKF", "DGD")) {
   })
 }
 
-# Combine all cohorts
-message("  Combining cohorts...")
-tumor_long <- bind_rows(tumor_parts)
-rm(tumor_parts)
-gc()
-
-message("  ", format(nrow(tumor_long), big.mark = ","), " tumor expression values from ",
-        length(unique(tumor_long$source_cohort)), " cohorts")
-
-# Save to temp file and free memory
-temp_tumor_file <- file.path(output_dir, "_temp_tumor.rds")
-saveRDS(tumor_long, temp_tumor_file)
-rm(tumor_long, tumor_tpm, tumor_samples_keep)
+rm(tumor_tpm)
 gc()
 
 # ==============================================================================
@@ -298,11 +332,13 @@ pedbrain_long <- pedbrain_tpm %>%
     names_to = "sample_id",
     values_to = "tpm"
   ) %>%
-  # Join metadata
-  left_join(
+  # Join metadata. The TPM columns are SRR accessions, which are in the
+  # histologies' sample_id column (Kids_First_Biospecimen_ID holds GSM IDs).
+  # inner_join keeps only samples with histologies (drops unannotated columns).
+  inner_join(
     pedbrain_histologies %>%
       select(
-        sample_id = Kids_First_Biospecimen_ID,
+        sample_id,
         primary_site,
         RNA_library
       ),
@@ -310,7 +346,7 @@ pedbrain_long <- pedbrain_tpm %>%
   ) %>%
   mutate(
     source_cohort = "Pediatric Normal Brain",
-    plot_group = paste("Pediatric", primary_site),
+    plot_group = primary_site,
     cohort = "Ped Normal Brain",
     composition = "Normal",
     short_histology = NA_character_,
@@ -414,9 +450,11 @@ for (partition_name in names(gene_partitions)) {
   # Load each cohort from temp file, filter, and combine
   # Load one at a time to minimize peak memory usage
   message("  Loading tumor data...")
-  tumor_partition <- readRDS(temp_tumor_file) %>%
-    filter(str_sub(gene_symbol, 1, 1) %in% letters_in_partition) %>%
-    select(all_of(standard_cols))
+  tumor_partition <- bind_rows(lapply(temp_tumor_files, function(f) {
+    readRDS(f) %>%
+      filter(str_sub(gene_symbol, 1, 1) %in% letters_in_partition) %>%
+      select(all_of(standard_cols))
+  }))
 
   message("  Loading GTEx data...")
   gtex_partition <- readRDS(temp_gtex_file) %>%
@@ -487,7 +525,7 @@ manifest_file <- file.path(output_dir, "manifest.json")
 # Count total unique samples across all cohorts
 message("\nCounting total samples...")
 temp_sample_counts <- length(unique(c(
-  readRDS(temp_tumor_file)$sample_id,
+  unlist(lapply(temp_tumor_files, function(f) unique(readRDS(f)$sample_id))),
   readRDS(temp_gtex_file)$sample_id,
   readRDS(temp_pedbrain_file)$sample_id,
   readRDS(temp_evodevo_file)$sample_id
@@ -495,7 +533,7 @@ temp_sample_counts <- length(unique(c(
 
 # Clean up temp files
 message("Cleaning up temporary files...")
-unlink(c(temp_tumor_file, temp_gtex_file, temp_pedbrain_file, temp_evodevo_file))
+unlink(c(temp_tumor_files, temp_gtex_file, temp_pedbrain_file, temp_evodevo_file))
 
 write_json(
   list(

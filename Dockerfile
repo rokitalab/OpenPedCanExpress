@@ -1,7 +1,7 @@
 # Dockerfile for OpenPedCanExpress preprocessing
 # Builds the Parquet expression database from OpenPedCan RDS matrices
 
-FROM rocker/tidyverse:4.4.0
+FROM rocker/tidyverse:4.5.2
 LABEL maintainer="Rokita Lab"
 
 WORKDIR /app
