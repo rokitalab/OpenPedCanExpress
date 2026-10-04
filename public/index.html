@@ -867,11 +867,17 @@
         .selectAll('text')
         .style('font-size', `${yTickSize}px`);
 
-      // Y axis label
+      // Y axis label: placed just left of the widest tick label so it never
+      // overlaps the ticks, regardless of font size or tick digit count.
+      const yTickFmt = y.tickFormat();
+      const maxTickChars = d3.max(y.ticks(), (t) => yTickFmt(t).length) ?? 1;
+      const yTickLabelWidth = maxTickChars * yTickSize * 0.6;
+      const yTitleOffset = 6 + 9 + yTickLabelWidth + 10 + axisTitleSize / 2;
+
       root.append('text')
         .attr('transform', 'rotate(-90)')
         .attr('x', -iH / 2)
-        .attr('y', -(margin.left - 110))
+        .attr('y', -yTitleOffset)
         .attr('text-anchor', 'middle')
         .attr('font-size', axisTitleSize)
         .attr('font-weight', 600)
