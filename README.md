@@ -4,7 +4,7 @@
 
 A lightweight, static web application for visualizing tumor vs. normal gene expression using RNA-seq TPM data from the [OpenPedCan project](https://github.com/rokitalab/OpenPedCan-Project-CNH). Built on DuckDB-WASM for client-side querying of genome-wide expression data without server infrastructure.
 
-🔗 **[Live app](https://rokitalab.github.io/OpenPedCanExpress/)** (coming soon)
+🔗 **[Live app](https://rokitalab.github.io/OpenPedCanExpress/)**
 
 ## Features
 
