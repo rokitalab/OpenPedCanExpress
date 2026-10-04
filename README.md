@@ -10,7 +10,7 @@ A lightweight, static web application for visualizing tumor vs. normal gene expr
 
 - **Genome-wide gene search** — query any gene across the full expression matrix
 - **Tumor vs. normal comparisons** — faceted box plots comparing:
-  - Primary pediatric tumors from the PBTA cohort (by histology and molecular subtype), with TARGET and GMKF available as additional cohorts (grouped by `cancer_group`); PBTA is shown by default
+  - Primary pediatric tumors from the PBTA cohort (by histology and molecular subtype), with TARGET and GMKF as additional cohorts (grouped by `cancer_group`); all cohorts are shown by default
   - GTEx normal brain (<40 years old)
   - Pediatric normal brain tissue (Cerebellum, Cortex, Pituitary, Pons)
   - Evo-devo developmental timepoints (4 weeks post-conception → elderly)
@@ -48,7 +48,7 @@ To rebuild the Parquet files from the source data, see [docker-README.md](docker
 All expression data comes from the OpenPedCan v15 data release ([rokitalab/OpenPedCan-Project-CNH](https://github.com/rokitalab/OpenPedCan-Project-CNH)) and was harmonized with the Gabriella Miller Kids First RNA-Seq workflow using the GENCODE v39 reference.
 
 Tumor cohorts (RNA-Seq, independent primary specimens only, one per participant within each cohort):
-- **PBTA** (Pediatric Brain Tumor Atlas) — shown by default
+- **PBTA** (Pediatric Brain Tumor Atlas)
 - **TARGET** — Therapeutically Applicable Research to Generate Effective Treatments
 - **GMKF** — Gabriella Miller Kids First
 

@@ -10,7 +10,7 @@ export const RELEASES = [
       "Expression data from `OpenPedCan v15`, with `TARGET` and `GMKF` tumor cohorts added, tumor samples restricted to independent RNA-Seq specimens, and new documentation.",
     changes: [
       "Expression data is from the `OpenPedCan v15` data release.",
-      "`TARGET` (1,125 samples) and `GMKF` (196 samples) tumor cohorts added. `PBTA` remains the default view; select `TARGET` or `GMKF` under `Cohorts` in `Configure Sample Groups`. Each cohort is shown in its own facet.",
+      "`TARGET` (1,125 samples) and `GMKF` (196 samples) tumor cohorts added. All cohorts are shown by default, each in its own facet; uncheck a cohort under `Cohorts` in `Configure Sample Groups` to hide it.",
       "Tumor facet headers are now named for their cohort (`PBTA`, `TARGET`, `GMKF`) instead of `Primary Tumors`.",
       "`TARGET` and `GMKF` samples are grouped by `cancer_group` (Acute Lymphoblastic Leukemia, Acute Myeloid Leukemia, Neuroblastoma, Osteosarcoma, Rhabdoid tumor of the kidney, Wilms tumor, Clear cell sarcoma of the kidney). Groups with 3 or fewer samples are not shown, and `Ganglioneuroblastoma` is combined with `Neuroblastoma`.",
       "Tumor samples are now limited to independent primary RNA-Seq specimens (one per participant within each cohort), from `independent-specimens.rnaseqpanel.primary.eachcohort.tsv`. Previously all RNA-Seq tumor samples in the expression matrix were used.",
