@@ -1132,7 +1132,10 @@
 
     let selectedGroups = new Set(); // Track which groups are selected
     let selectedSubtypes = new Set(); // Track which molecular subtypes are selected
-    let selectedCohorts = new Set(['PBTA']); // Track which tumor cohorts are selected (default: PBTA only)
+    // Tumor cohorts shown. An empty set means no cohort filtering, so all cohorts are shown by
+    // default; the config panel then checks every available cohort the first time it is built.
+    let selectedCohorts = new Set();
+    let cohortsInitialized = false;
     let availableGroups = { tumors: [], controls: [], subtypes: [], cohorts: [] }; // Available groups from data
 
     function populateConfigPanel() {
@@ -1162,6 +1165,11 @@
         }
       });
       availableGroups.cohorts = Array.from(cohorts).sort();
+
+      if (!cohortsInitialized) {
+        availableGroups.cohorts.forEach(c => selectedCohorts.add(c));
+        cohortsInitialized = true;
+      }
 
       // Get unique molecular subtypes from tumor samples
       const subtypes = new Set();

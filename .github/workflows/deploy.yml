@@ -1,10 +1,13 @@
 name: Deploy to GitHub Pages
 
+# Publishes one Pages site:
+#   /      the app from main (public/)
+#   /dev/  the latest PR preview, from the gh-pages-dev branch
 on:
   push:
     branches:
       - main
-      - feature/initial-scaffolding  # Temporary: for testing before merge
+      - gh-pages-dev
   workflow_dispatch:
 
 permissions:
@@ -23,8 +26,28 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
+      - name: Checkout PR preview (dev)
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages-dev
+          path: dev
+        continue-on-error: true
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          if [ -d main/public ]; then cp -r main/public/. _site/; fi
+          if [ -d dev ]; then
+            mkdir -p _site/dev
+            rsync -a --exclude '.git' dev/ _site/dev/
+          fi
+          touch _site/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -32,7 +55,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './public'
+          path: './_site'
 
       - name: Deploy to GitHub Pages
         id: deployment
