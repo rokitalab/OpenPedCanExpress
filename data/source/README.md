@@ -9,7 +9,7 @@ To run the preprocessing script (`scripts/01-build-expression-parquet.R`), place
 ### From OpenPedCan data release:
 
 1. **histologies.tsv** — main histologies file with tumor and control metadata
-2. **gene-expression-rsem-tpm-collapsed.rds** — tumor TPM expression matrix (PBTA, TARGET, GMKF, DGD)
+2. **gene-expression-rsem-tpm-collapsed.rds** — tumor TPM expression matrix (PBTA, TARGET, GMKF)
 3. **gtex-harmonized-gene-expression-rsem-tpm-collapsed.brain-under40.rds** — GTEx brain TPM matrix (<40 years)
 4. **ped-normal-brain-gene-expression-rsem-tpm.all.rds** — pediatric normal brain TPM matrix
 5. **evodevo_gene-expression-rsem-tpm-collapsed.all.rds** — evo-devo TPM matrix
