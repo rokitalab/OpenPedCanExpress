@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenPedCanExpress — Pediatric Brain Tumor Gene Expression Explorer</title>
+  <meta name="description" content="Interactive browser-based tool for exploring gene expression across pediatric brain tumors and normal tissue controls">
+
+  <!-- D3.js -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <!-- jsPDF for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f5f5f5;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 2rem;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: white;
+      margin-bottom: 2rem;
+      border-bottom: 2px solid #e0e0e0;
+      padding: 1rem 2rem;
+      margin-left: -2rem;
+      margin-right: -2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #1a1a1a;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      font-size: 1rem;
+      color: #666;
+    }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding: 1rem;
+      background: #f9f9f9;
+      border-radius: 6px;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 300px;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      transition: border-color 0.2s;
+    }
+
+    .search-box input:focus {
+      outline: none;
+      border-color: #4a90e2;
+    }
+
+    .toggle-group {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    button {
+      padding: 0.75rem 1.5rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    button.primary {
+      background: #4a90e2;
+      color: white;
+    }
+
+    button.primary:hover {
+      background: #357abd;
+    }
+
+    button.secondary {
+      background: #e0e0e0;
+      color: #333;
+    }
+
+    button.secondary:hover {
+      background: #d0d0d0;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 3rem;
+      color: #666;
+    }
+
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #4a90e2;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .error {
+      background: #fee;
+      color: #c33;
+      padding: 1rem;
+      border-radius: 6px;
+      border-left: 4px solid #c33;
+      margin-bottom: 1rem;
+    }
+
+    .plot-container {
+      margin-top: 2rem;
+      min-height: 500px;
+    }
+
+    .plot-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: rgba(30,30,30,0.95);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      line-height: 1.5;
+      pointer-events: none;
+      z-index: 1000;
+      white-space: nowrap;
+      display: none;
+    }
+
+    footer {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #e0e0e0;
+      text-align: center;
+      font-size: 0.9rem;
+      color: #666;
+    }
+
+    footer a {
+      color: #4a90e2;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Configuration Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 2000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      max-width: 1100px;
+      max-height: 88vh;
+      width: 92%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      padding: 1.5rem;
+      border-bottom: 2px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 2rem;
+      color: #999;
+      cursor: pointer;
+      padding: 0;
+      width: 36px;
+      height: 36px;
+      line-height: 1;
+    }
+
+    .close-btn:hover {
+      color: #333;
+    }
+
+    .modal-body {
+      padding: 1.5rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .config-section {
+      margin-bottom: 2rem;
+    }
+
+    .config-section h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: #1a1a1a;
+    }
+
+    .checkbox-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+      gap: 0.15rem 1rem;
+    }
+
+    /* Cohort sub-heading that spans the full width of a checkbox grid */
+    .group-heading {
+      grid-column: 1 / -1;
+      margin: 0.9rem 0 0.25rem;
+      padding-bottom: 0.25rem;
+      border-bottom: 1px solid #e0e0e0;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #555;
+    }
+
+    .group-heading:first-child {
+      margin-top: 0;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.35rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .checkbox-item:hover {
+      background: #f1f5fb;
+    }
+
+    .checkbox-item input[type="checkbox"] {
+      flex-shrink: 0;
+    }
+
+    .checkbox-item label {
+      cursor: pointer;
+      user-select: none;
+      flex: 1;
+      font-size: 0.95rem;
+      line-height: 1.3;
+    }
+
+    .color-indicator {
+      width: 18px;
+      height: 18px;
+      border-radius: 3px;
+      border: 1px solid #ccc;
+      flex-shrink: 0;
+    }
+
+    .modal-footer {
+      padding: 1rem 1.5rem;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>OpenPedCanExpress</h1>
+      <p class="subtitle">Interactive gene expression explorer for pediatric tumors vs. normal controls ·
+        <a href="docs.html">Docs</a> · <a href="release-notes.html">Release notes</a></p>
+    </header>
+
+    <div class="controls">
+      <div class="search-box">
+        <input
+          type="text"
+          id="gene-search"
+          placeholder="Search for a gene (e.g., EGFR, TP53, CD276)..."
+          autocomplete="off"
+        />
+      </div>
+
+      <div class="toggle-group">
+        <label>
+          <input type="checkbox" id="log2-toggle" checked />
+          <span>log₂ scale</span>
+        </label>
+      </div>
+
+      <button class="secondary" id="configure-btn">Configure Groups</button>
+
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <label for="sort-tumors" style="font-weight: 600; color: #666;">Sort tumors:</label>
+        <select id="sort-tumors" style="padding: 0.75rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px; cursor: pointer;">
+          <option value="alphabetical">Alphabetical</option>
+          <option value="median-desc">Median (high to low)</option>
+          <option value="median-asc">Median (low to high)</option>
+        </select>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <label for="export-box-width" style="font-weight: 600; color: #666;" title="Pixel width per group; lower to compress a plot with many groups">Box width:</label>
+        <input type="number" id="export-box-width" value="65" min="20" max="200" step="5"
+               style="width: 64px; padding: 0.5rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px;" />
+        <label for="export-height" style="font-weight: 600; color: #666;">Height:</label>
+        <input type="number" id="export-height" value="500" min="200" max="1200" step="20"
+               style="width: 72px; padding: 0.5rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px;" />
+        <label for="export-font-size" style="font-weight: 600; color: #666;">Font size:</label>
+        <input type="number" id="export-font-size" value="14" min="8" max="28" step="1"
+               style="width: 56px; padding: 0.5rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px;" />
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <select id="export-format" style="padding: 0.75rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px; cursor: pointer;">
+          <option value="pdf">PDF</option>
+          <option value="jpg">JPG (300 DPI)</option>
+          <option value="png">PNG (300 DPI)</option>
+          <option value="svg">SVG</option>
+        </select>
+        <button class="secondary" id="export-btn" disabled>Export Plot</button>
+      </div>
+    </div>
+
+    <div id="status-area"></div>
+
+    <!-- Configuration Modal -->
+    <div id="config-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Configure Sample Groups</h2>
+          <button class="close-btn" id="close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="config-section">
+            <h3>Tumors</h3>
+
+            <div style="margin-bottom: 1rem;">
+              <h4 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; color: #555;">Cohorts</h4>
+              <div style="margin-bottom: 0.75rem;">
+                <label style="font-weight: 600; color: #666;">
+                  <input type="checkbox" id="toggle-all-cohorts" />
+                  All Cohorts
+                </label>
+              </div>
+              <div id="cohort-checkboxes" class="checkbox-grid"></div>
+            </div>
+
+            <div style="margin-bottom: 1rem; border-top: 1px solid #e0e0e0; padding-top: 1rem;">
+              <h4 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; color: #555;">Histologies</h4>
+              <div style="margin-bottom: 0.75rem;">
+                <label style="font-weight: 600; color: #666;">
+                  <input type="checkbox" id="toggle-all-pbta" checked />
+                  All Tumor Histologies
+                </label>
+              </div>
+              <div id="tumor-checkboxes" class="checkbox-grid"></div>
+            </div>
+
+            <div style="margin-bottom: 0.5rem; border-top: 1px solid #e0e0e0; padding-top: 1rem;">
+              <h4 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; color: #555;">Molecular Subtypes</h4>
+              <div style="margin-bottom: 0.75rem;">
+                <label style="font-weight: 600; color: #666;">
+                  <input type="checkbox" id="toggle-all-subtypes" checked />
+                  All Molecular Subtypes
+                </label>
+              </div>
+              <div style="margin-bottom: 0.75rem;">
+                <label style="font-weight: 600; color: #666;">
+                  <input type="checkbox" id="split-subtypes-toggle" />
+                  Split by molecular subtype
+                </label>
+              </div>
+              <div id="subtype-checkboxes" class="checkbox-grid"></div>
+            </div>
+          </div>
+
+          <div class="config-section" style="border-top: 2px solid #e0e0e0; padding-top: 1.5rem;">
+            <h3>Control Cohorts</h3>
+            <div style="margin-bottom: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;">
+              <label style="font-weight: 600; color: #666;">
+                <input type="checkbox" id="toggle-all-gtex" checked />
+                All GTEx
+              </label>
+              <label style="font-weight: 600; color: #666;">
+                <input type="checkbox" id="toggle-all-evodevo" checked />
+                All Evo-devo
+              </label>
+              <label style="font-weight: 600; color: #666;">
+                <input type="checkbox" id="toggle-all-pedbrain" checked />
+                All Pediatric Brain
+              </label>
+            </div>
+            <div id="control-checkboxes" class="checkbox-grid"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <div class="button-group">
+            <button class="secondary" id="select-all-btn">Select All</button>
+            <button class="secondary" id="deselect-all-btn">Deselect All</button>
+          </div>
+          <button class="primary" id="apply-config-btn">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="plot-container">
+      <div class="plot-title" id="plot-title"></div>
+      <svg id="plot-svg" width="1200" height="500"></svg>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+
+  <footer>
+    <p>
+      <a href="docs.html">Docs</a> ·
+      <a href="release-notes.html">Release notes</a> ·
+      Data from <a href="https://github.com/rokitalab/OpenPedCan-Project-CNH" target="_blank">OpenPedCan</a> ·
+      Built with <a href="https://duckdb.org/docs/api/wasm" target="_blank">DuckDB-WASM</a> and <a href="https://d3js.org" target="_blank">D3.js</a> ·
+      <a href="https://github.com/rokitalab/OpenPedCanExpress" target="_blank">Source on GitHub</a>
+    </p>
+  </footer>
+
+  <script type="module">
+    // ===========================================================================
+    // DuckDB-WASM initialization
+    // ===========================================================================
+
+    import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
+    import { histologyColor, controlCohortColor, groupColor, facetName, FACET_ORDER, evoDevoOrder } from './tapestry-colors.js';
+
+    let db = null;
+    let conn = null;
+
+    async function initDuckDB() {
+      showStatus('Loading DuckDB...', false);
+
+      // Manual bundle configuration to avoid CORS issues
+      const MANUAL_BUNDLES = {
+        mvp: {
+          mainModule: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-mvp.wasm',
+          mainWorker: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-mvp.worker.js',
+        },
+        eh: {
+          mainModule: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-eh.wasm',
+          mainWorker: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-eh.worker.js',
+        },
+      };
+
+      // Select bundle
+      const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
+
+      // Create worker from blob to avoid CORS
+      const workerUrl = URL.createObjectURL(
+        new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
+      );
+      const worker = new Worker(workerUrl);
+      URL.revokeObjectURL(workerUrl);
+
+      const logger = new duckdb.ConsoleLogger();
+      db = new duckdb.AsyncDuckDB(logger, worker);
+      await db.instantiate(bundle.mainModule);
+      conn = await db.connect();
+
+      // Register Parquet files from S3
+      // Add ?data=local to the page URL to read locally rebuilt Parquet files
+      // (served on port 8081) instead of the published S3 copy.
+      const S3_BUCKET_URL = new URLSearchParams(location.search).get('data') === 'local'
+        ? 'http://127.0.0.1:8081'
+        : 'https://bti-openaccess-us-east-1-prd-rokita-lab.s3.us-east-1.amazonaws.com/opc-express/v1.1.0';
+
+      const partitions = [
+        'genes_A-H.parquet',
+        'genes_I-P.parquet',
+        'genes_Q-Z.parquet'
+      ];
+
+      // Create a unified view by querying all partitions
+      let viewQuery = 'CREATE OR REPLACE VIEW expr_data AS ';
+      for (let i = 0; i < partitions.length; i++) {
+        const fileUrl = `${S3_BUCKET_URL}/${partitions[i]}`;
+        if (i > 0) viewQuery += ' UNION ALL ';
+        viewQuery += `SELECT * FROM parquet_scan('${fileUrl}')`;
+      }
+
+      await conn.query(viewQuery);
+
+      // Supplemental plot groups for non-PBTA tumor cohorts (TARGET, GMKF):
+      // independent specimens grouped by cancer_group, groups with N <= 3 dropped.
+      const plotGroupsResp = await fetch('./plot-groups.tsv');
+      if (!plotGroupsResp.ok) {
+        throw new Error(`Could not load plot-groups.tsv (HTTP ${plotGroupsResp.status})`);
+      }
+      (await plotGroupsResp.text())
+        .split('\n')
+        .slice(1)
+        .map((line) => line.replace(/\r$/, '').split('\t'))
+        .filter((cols) => cols.length >= 3 && cols[0])
+        .forEach(([id, , group]) => plotGroupBySample.set(id, group));
+
+      showStatus('Ready! Search for a gene above.', false, false);
+    }
+
+    // ===========================================================================
+    // UI helpers
+    // ===========================================================================
+
+    function showStatus(message, isError = false, showSpinner = true) {
+      const statusArea = document.getElementById('status-area');
+      if (!message) {
+        statusArea.innerHTML = '';
+        return;
+      }
+
+      if (isError) {
+        statusArea.innerHTML = `<div class="error">${message}</div>`;
+      } else if (showSpinner) {
+        statusArea.innerHTML = `<div class="loading"><div class="spinner"></div><p>${message}</p></div>`;
+      } else {
+        // Check if this is the "Ready!" message and style it differently
+        const isReadyMessage = message.includes('Ready!');
+        const color = isReadyMessage ? '#1e88e5' : '#666';
+        const fontWeight = isReadyMessage ? 'bold' : 'normal';
+        statusArea.innerHTML = `<p style="text-align: center; color: ${color}; font-weight: ${fontWeight}; padding: 1rem;">${message}</p>`;
+      }
+    }
+
+    function clearStatus() {
+      document.getElementById('status-area').innerHTML = '';
+    }
+
+    // ===========================================================================
+    // Gene search and data fetching
+    // ===========================================================================
+
+    let currentGene = null;
+    // sample_id -> plot_group for non-PBTA tumor samples (loaded from plot-groups.tsv)
+    const plotGroupBySample = new Map();
+    let currentData = null;
+
+    document.getElementById('gene-search').addEventListener('keypress', async (e) => {
+      if (e.key === 'Enter') {
+        const gene = e.target.value.trim().toUpperCase();
+        if (!gene) return;
+
+        await fetchGeneData(gene);
+      }
+    });
+
+    async function fetchGeneData(gene) {
+      if (!conn) {
+        showStatus('Database not ready. Please wait...', true);
+        return;
+      }
+
+      showStatus(`Loading expression data for ${gene}...`, false);
+      currentGene = gene;
+
+      try {
+        const result = await conn.query(`
+          SELECT
+            gene_symbol,
+            sample_id,
+            tpm,
+            source_cohort,
+            plot_group,
+            cohort,
+            molecular_subtype,
+            is_tumor,
+            is_control
+          FROM expr_data
+          WHERE gene_symbol = '${gene}'
+        `);
+
+        // Non-PBTA tumors: keep only independent specimens in plot-groups.tsv
+        // and use their cancer_group as the plot group.
+        const rows = result.toArray()
+          .map(row => Object.fromEntries(row))
+          .filter(r => r.is_control || r.cohort === 'PBTA' || plotGroupBySample.has(r.sample_id))
+          .map(r => (r.is_control || r.cohort === 'PBTA')
+            ? r
+            : { ...r, plot_group: plotGroupBySample.get(r.sample_id) });
+
+        if (rows.length === 0) {
+          showStatus(`No data found for gene "${gene}". Try another gene.`, true);
+          return;
+        }
+
+        currentData = rows;
+        clearStatus();
+        renderPlot();
+        document.getElementById('export-btn').disabled = false;
+
+      } catch (err) {
+        showStatus(`Error loading data: ${err.message}`, true);
+      }
+    }
+
+    // Sort tumors dropdown
+    document.getElementById('sort-tumors').addEventListener('change', (e) => {
+      console.log('Sort changed to:', e.target.value);
+      if (currentData) {
+        renderPlot();
+      }
+    });
+
+    // ===========================================================================
+    // D3 Box Plot Rendering (TAPESTRY-style with faceting)
+    // ===========================================================================
+
+    const MARGIN = { top: 20, right: 20, bottom: 240, left: 170 };
+    const FACET_GAP = 16;
+    const FACET_STRIP_H = 20;
+
+    function boxStats(values) {
+      const sorted = values.slice().sort(d3.ascending);
+      const q1 = d3.quantile(sorted, 0.25);
+      const median = d3.quantile(sorted, 0.5);
+      const q3 = d3.quantile(sorted, 0.75);
+      const iqr = q3 - q1;
+      return {
+        q1, median, q3,
+        lo: Math.max(d3.min(sorted), q1 - 1.5 * iqr),
+        hi: Math.min(d3.max(sorted), q3 + 1.5 * iqr)
+      };
+    }
+
+    function jitterFromId(id) {
+      let hash = 0;
+      for (let i = 0; i < id.length; i++) {
+        hash = (hash * 31 + id.charCodeAt(i)) | 0;
+      }
+      return (Math.abs(hash) % 1000) / 1000 - 0.5;
+    }
+
+    // Reference font size the base MARGIN was tuned for; margins scale with
+    // the user-chosen export font size relative to this.
+    const BASE_FONT_SIZE = 14;
+
+    function marginForFontSize(fontSize) {
+      const s = fontSize / BASE_FONT_SIZE;
+      return {
+        top: MARGIN.top,
+        right: MARGIN.right,
+        bottom: Math.round(MARGIN.bottom * s),
+        left: Math.round(MARGIN.left * s)
+      };
+    }
+
+    // Computes the grouped/faceted data (width-independent). Shared by the
+    // on-screen render and the export render so both stay in sync.
+    function computeFacetBuckets(log2Scale) {
+      // Transform TPM values
+      const xform = (tpm) => log2Scale ? Math.log2(tpm + 1) : tpm;
+
+      // Check if we should split by molecular subtype
+      const splitBySubtype = document.getElementById('split-subtypes-toggle').checked;
+
+      // Filter data by cohort, plot_group, and molecular subtype selection
+      const filteredData = currentData.filter(d => {
+        // Controls: filter by selectedGroups
+        if (d.is_control) {
+          const groupKey = d.plot_group || 'Unknown';
+          return selectedGroups.size === 0 || selectedGroups.has(groupKey);
+        }
+
+        // Tumors: filter by cohort first
+        if (selectedCohorts.size > 0 && !selectedCohorts.has(d.cohort)) {
+          return false; // Exclude if cohort not selected
+        }
+
+        // Then check plot_group and molecular_subtype
+        const groupKey = d.plot_group || 'Unknown';
+        const hasValidSubtype = d.molecular_subtype && d.molecular_subtype !== 'NA' && d.molecular_subtype.trim() !== '';
+
+        // If tumor has a selected molecular subtype, include it
+        if (hasValidSubtype && selectedSubtypes.size > 0 && selectedSubtypes.has(d.molecular_subtype)) {
+          return true;
+        }
+
+        // Otherwise, check if the plot_group is selected
+        return selectedGroups.size === 0 || selectedGroups.has(groupKey);
+      });
+
+      // Group by plot_group (and optionally molecular_subtype for tumors)
+      // For controls, include source_cohort to avoid name collisions (e.g., GTEx "Cerebellum" vs Pediatric "Cerebellum")
+      const grouped = d3.group(filteredData, d => {
+        const baseGroup = d.plot_group || 'Unknown';
+        const hasValidSubtype = d.is_tumor && d.molecular_subtype &&
+                                d.molecular_subtype !== 'NA' && d.molecular_subtype.trim() !== '';
+
+        // Split by subtype if:
+        // 1. The toggle is checked, OR
+        // 2. This sample has a selected molecular subtype (user explicitly selected subtypes)
+        const shouldSplitBySubtype = splitBySubtype ||
+                                     (hasValidSubtype && selectedSubtypes.size > 0 && selectedSubtypes.has(d.molecular_subtype));
+
+        // Non-PBTA tumor cohorts are prefixed with their cohort so identical
+        // group names in different cohorts stay separate (they get their own facet).
+        const tumorPrefix = d.is_tumor && d.cohort !== 'PBTA' ? `${d.cohort}:` : '';
+
+        if (shouldSplitBySubtype && hasValidSubtype) {
+          return `${tumorPrefix}${baseGroup} (${d.molecular_subtype})`;
+        }
+
+        if (tumorPrefix) {
+          return `${tumorPrefix}${baseGroup}`;
+        }
+
+        // For controls, prefix with source_cohort to keep GTEx and Pediatric brain regions separate
+        if (d.is_control) {
+          return `${d.source_cohort}:${baseGroup}`;
+        }
+
+        return baseGroup;
+      });
+      const allGroups = Array.from(grouped, ([key, values]) => ({
+        key,
+        // For controls with cohort prefix, show only the plot_group part as the label
+        label: (values[0].is_control || (values[0].is_tumor && values[0].cohort !== 'PBTA'))
+          ? key.slice(key.indexOf(':') + 1)
+          : key,
+        plot_group: values[0].plot_group || key,
+        values: values.map(v => ({ ...v, tpm_transformed: xform(v.tpm) })),
+        is_tumor: values[0].is_tumor,
+        is_control: values[0].is_control,
+        is_cell_line: false,
+        source_cohort: values[0].source_cohort,
+        cohort: values[0].cohort
+      }));
+
+      // Don't need to filter groups here - we already filtered the data above
+      // Groups created from filtered data are exactly what we want to display
+      const groups = allGroups;
+
+      // Create facets (PBTA | TARGET | GMKF | GTEx | Ped Brain | Evo-devo)
+      const sortOption = document.getElementById('sort-tumors').value;
+
+      const facetBuckets = FACET_ORDER
+        .map((name) => {
+          const facetGroups = groups.filter((g) => facetName(g) === name);
+
+          // Sort evo-devo groups by developmental order
+          if (name === "Evo-devo") {
+            facetGroups.sort((a, b) => evoDevoOrder(a.plot_group) - evoDevoOrder(b.plot_group));
+          }
+
+          // Sort tumor groups based on selected option
+          if (["PBTA", "TARGET", "GMKF"].includes(name)) {
+            console.log('Sorting tumors with option:', sortOption);
+            console.log('Tumor groups before sort:', facetGroups.map(g => g.key));
+
+            // Apply sorting
+            if (sortOption === 'median-desc' || sortOption === 'median-asc') {
+              // Calculate median for each group
+              facetGroups.forEach(g => {
+                const vals = g.values.map(v => v.tpm_transformed);
+                const stats = boxStats(vals);
+                g._median = stats.median;
+              });
+
+              if (sortOption === 'median-desc') {
+                facetGroups.sort((a, b) => (b._median || 0) - (a._median || 0));
+              } else {
+                facetGroups.sort((a, b) => (a._median || 0) - (b._median || 0));
+              }
+            } else {
+              // alphabetical (default)
+              facetGroups.sort((a, b) => a.key.localeCompare(b.key));
+            }
+
+            console.log('Tumor groups after sort:', facetGroups.map(g => g.key));
+          }
+
+          return { name, groups: facetGroups };
+        })
+        .filter((f) => f.groups.length > 0);
+
+      return { facetBuckets, groups };
+    }
+
+    // Draws the chart into `svg` at the given pixel size, given already-computed
+    // facetBuckets/groups (from computeFacetBuckets). Used for both the on-screen
+    // render and the (independently sized) export render.
+    function drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize = BASE_FONT_SIZE) {
+      const xform = (tpm) => log2Scale ? Math.log2(tpm + 1) : tpm;
+      const margin = marginForFontSize(fontSize);
+      const xTickSize = fontSize;
+      const yTickSize = fontSize + 2;
+      const facetLabelSize = fontSize + 1;
+      const axisTitleSize = fontSize + 4;
+
+      svg.attr('width', width).attr('height', height);
+      svg.selectAll('*').remove();
+
+      const iW = width - margin.left - margin.right;
+      const iH = height - margin.top - margin.bottom - FACET_STRIP_H;
+
+      // Y scale (shared across facets)
+      const allVals = currentData.map(d => xform(d.tpm));
+      const yMax = d3.max(allVals) ?? 1;
+      const y = d3.scaleLinear().domain([0, yMax]).nice().range([iH, 0]);
+
+      // Calculate facet widths proportional to group count
+      const facetGapWidth = FACET_GAP * Math.max(0, facetBuckets.length - 1);
+      const usableWidth = Math.max(iW - facetGapWidth, 0);
+
+      const scaleForKey = new Map();
+      let cursor = 0;
+      facetBuckets.forEach((f) => {
+        const facetWidth = usableWidth * (f.groups.length / groups.length);
+        f.scale = d3.scaleBand()
+          .domain(f.groups.map((g) => g.key))
+          .range([cursor, cursor + facetWidth])
+          .padding(0.35);
+        f.groups.forEach((g) => scaleForKey.set(g.key, f.scale));
+        cursor += facetWidth + FACET_GAP;
+      });
+
+      const root = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top + FACET_STRIP_H})`);
+
+      // Grid lines
+      root.append('g')
+        .call(d3.axisLeft(y).tickSize(-iW).tickFormat(''))
+        .call(g => g.select('.domain').remove())
+        .call(g => g.selectAll('line').attr('stroke', '#e0e0e0').attr('stroke-dasharray', '3,3'));
+
+      // Y axis
+      root.append('g')
+        .call(d3.axisLeft(y))
+        .selectAll('text')
+        .style('font-size', `${yTickSize}px`);
+
+      // Y axis label: placed just left of the widest tick label so it never
+      // overlaps the ticks, regardless of font size or tick digit count.
+      const yTickFmt = y.tickFormat();
+      const maxTickChars = d3.max(y.ticks(), (t) => yTickFmt(t).length) ?? 1;
+      const yTickLabelWidth = maxTickChars * yTickSize * 0.6;
+      const yTitleOffset = 6 + 9 + yTickLabelWidth + 10 + axisTitleSize / 2;
+
+      root.append('text')
+        .attr('transform', 'rotate(-90)')
+        .attr('x', -iH / 2)
+        .attr('y', -yTitleOffset)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', axisTitleSize)
+        .attr('font-weight', 600)
+        .style('fill', '#000')
+        .text(log2Scale ? 'log₂(TPM + 1)' : 'TPM');
+
+      // Facet strip labels (TAPESTRY-style with underline)
+      facetBuckets.forEach((f, i) => {
+        const facetX = i === 0 ? 0 : (facetBuckets.slice(0, i).reduce((sum, fb) =>
+          sum + usableWidth * (fb.groups.length / groups.length) + FACET_GAP, 0));
+        const facetW = usableWidth * (f.groups.length / groups.length);
+
+        // Facet label text
+        root.append('text')
+          .attr('x', facetX + facetW / 2)
+          .attr('y', -FACET_STRIP_H / 2 - 2)
+          .attr('text-anchor', 'middle')
+          .attr('font-size', facetLabelSize)
+          .attr('font-weight', 600)
+          .attr('fill', '#333')
+          .text(f.name);
+
+        // Underline
+        root.append('line')
+          .attr('x1', facetX)
+          .attr('x2', facetX + facetW)
+          .attr('y1', -2)
+          .attr('y2', -2)
+          .attr('stroke', '#333')
+          .attr('stroke-width', 2);
+      });
+
+      // X axis labels (per facet)
+      const labelForKey = new Map(groups.map((g) => [g.key, g.label]));
+      facetBuckets.forEach((f) => {
+        root.append('g')
+          .attr('transform', `translate(0,${iH})`)
+          .call(d3.axisBottom(f.scale).tickFormat((key) => labelForKey.get(key) ?? key))
+          .selectAll('text')
+          .attr('transform', 'rotate(-45)')
+          .style('text-anchor', 'end')
+          .style('font-size', `${xTickSize}px`)
+          .attr('dx', '-0.8em')
+          .attr('dy', '0.5em');
+      });
+
+      // Box plots (using TAPESTRY colors and faceted scales)
+      groups.forEach(g => {
+        const { key, label, values } = g;
+        const tpms = values.map(v => v.tpm_transformed);
+        const stats = boxStats(tpms);
+
+        const xScale = scaleForKey.get(key);
+        if (!xScale) return;
+
+        const cx = xScale(key) + xScale.bandwidth() / 2;
+        const bw = xScale.bandwidth() * 0.7;
+        const color = groupColor(g);
+
+        // Whiskers
+        root.append('line')
+          .attr('x1', cx).attr('x2', cx)
+          .attr('y1', y(stats.lo)).attr('y2', y(stats.q1))
+          .attr('stroke', '#333')
+          .attr('stroke-width', 1.5)
+          .attr('stroke-dasharray', '4,2');
+
+        root.append('line')
+          .attr('x1', cx).attr('x2', cx)
+          .attr('y1', y(stats.q3)).attr('y2', y(stats.hi))
+          .attr('stroke', '#333')
+          .attr('stroke-width', 1.5)
+          .attr('stroke-dasharray', '4,2');
+
+        // Whisker caps
+        [stats.lo, stats.hi].forEach(v => {
+          root.append('line')
+            .attr('x1', cx - bw / 4).attr('x2', cx + bw / 4)
+            .attr('y1', y(v)).attr('y2', y(v))
+            .attr('stroke', '#333')
+            .attr('stroke-width', 1.5);
+        });
+
+        // Box
+        root.append('rect')
+          .attr('x', cx - bw / 2)
+          .attr('y', y(stats.q3))
+          .attr('width', bw)
+          .attr('height', Math.abs(y(stats.q1) - y(stats.q3)))
+          .attr('fill', color)
+          .attr('fill-opacity', 0.3)
+          .attr('stroke', '#333')
+          .attr('stroke-width', 1.5)
+          .attr('rx', 2);
+
+        // Median line
+        root.append('line')
+          .attr('x1', cx - bw / 2).attr('x2', cx + bw / 2)
+          .attr('y1', y(stats.median)).attr('y2', y(stats.median))
+          .attr('stroke', '#333')
+          .attr('stroke-width', 2.5);
+
+        // Individual points (with deterministic jitter)
+        values.forEach((v) => {
+          const jitter = jitterFromId(v.sample_id) * bw * 0.6;
+          root.append('circle')
+            .attr('cx', cx + jitter)
+            .attr('cy', y(v.tpm_transformed))
+            .attr('r', 3)
+            .attr('fill', color)
+            .attr('fill-opacity', 0.6)
+            .attr('stroke', '#333')
+            .attr('stroke-width', 0.5)
+            .style('cursor', 'pointer')
+            .on('mouseover', (event) => showTooltip(event, v, label, log2Scale))
+            .on('mouseout', hideTooltip);
+        });
+      });
+    }
+
+    function renderPlot() {
+      if (!currentData || currentData.length === 0) return;
+
+      const log2Scale = document.getElementById('log2-toggle').checked;
+      const { facetBuckets, groups } = computeFacetBuckets(log2Scale);
+
+      // Make plot responsive to container width
+      const container = document.querySelector('.plot-container');
+      const width = Math.min(1400, container.clientWidth);
+      const height = 500;
+
+      const svg = d3.select('#plot-svg');
+      drawChart(svg, width, height, facetBuckets, groups, log2Scale);
+
+      // Update title
+      document.getElementById('plot-title').textContent = `${currentGene} Expression`;
+    }
+
+    // Builds an off-screen SVG sized from the user's box width/height/font size
+    // controls, so the user can compress or expand the export directly instead
+    // of relying on an automatic heuristic. Returns the detached <svg> DOM node
+    // plus its pixel dimensions.
+    function buildExportSvg() {
+      const log2Scale = document.getElementById('log2-toggle').checked;
+      const { facetBuckets, groups } = computeFacetBuckets(log2Scale);
+
+      const boxWidth = parseFloat(document.getElementById('export-box-width').value) || 65;
+      const height = parseFloat(document.getElementById('export-height').value) || 500;
+      const fontSize = parseFloat(document.getElementById('export-font-size').value) || BASE_FONT_SIZE;
+
+      const groupCount = groups.length;
+      const margin = marginForFontSize(fontSize);
+      const facetGapTotal = FACET_GAP * Math.max(0, facetBuckets.length - 1);
+      const width = margin.left + margin.right + facetGapTotal + groupCount * boxWidth;
+
+      const svg = d3.create('svg').attr('xmlns', 'http://www.w3.org/2000/svg');
+      drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize);
+
+      return { node: svg.node(), width, height };
+    }
+
+    // ===========================================================================
+    // Tooltip
+    // ===========================================================================
+
+    function showTooltip(event, dataPoint, group, isLog2) {
+      const tooltip = document.getElementById('tooltip');
+      const value = isLog2 ? Math.log2(dataPoint.tpm + 1) : dataPoint.tpm;
+      const label = isLog2 ? 'log₂(TPM+1)' : 'TPM';
+
+      tooltip.innerHTML = `
+        <strong>${dataPoint.sample_id}</strong><br/>
+        ${group}<br/>
+        ${label}: ${value.toFixed(3)}
+      `;
+
+      tooltip.style.display = 'block';
+      tooltip.style.left = (event.pageX + 14) + 'px';
+      tooltip.style.top = (event.pageY - 32) + 'px';
+    }
+
+    function hideTooltip() {
+      document.getElementById('tooltip').style.display = 'none';
+    }
+
+    // ===========================================================================
+    // Sample Group Configuration
+    // ===========================================================================
+
+    let selectedGroups = new Set(); // Track which groups are selected
+    let selectedSubtypes = new Set(); // Track which molecular subtypes are selected
+    // Tumor cohorts shown. An empty set means no cohort filtering, so all cohorts are shown by
+    // default; the config panel then checks every available cohort the first time it is built.
+    let selectedCohorts = new Set();
+    let cohortsInitialized = false;
+    let availableGroups = { tumors: [], controls: [], subtypes: [], cohorts: [] }; // Available groups from data
+
+    function populateConfigPanel() {
+      if (!currentData || currentData.length === 0) return;
+
+      // Extract unique groups
+      const grouped = d3.group(currentData, d => d.plot_group || 'Unknown');
+      const groups = Array.from(grouped, ([key, values]) => ({
+        key,
+        is_tumor: values[0].is_tumor,
+        is_control: values[0].is_control,
+        source_cohort: values[0].source_cohort,
+        cohort: values[0].cohort
+      }));
+
+      availableGroups.tumors = groups.filter(g => g.is_tumor).map(g => ({ key: g.key, cohort: g.cohort })).sort((a, b) => a.key.localeCompare(b.key));
+      availableGroups.controls = groups.filter(g => g.is_control).map(g => {
+        const groupData = groups.find(gd => gd.key === g.key);
+        return { key: g.key, cohort: groupData.source_cohort };
+      }).sort((a, b) => a.key.localeCompare(b.key));
+
+      // Get unique tumor cohorts
+      const cohorts = new Set();
+      currentData.forEach(d => {
+        if (d.is_tumor && d.cohort) {
+          cohorts.add(d.cohort);
+        }
+      });
+      availableGroups.cohorts = Array.from(cohorts).sort();
+
+      if (!cohortsInitialized) {
+        availableGroups.cohorts.forEach(c => selectedCohorts.add(c));
+        cohortsInitialized = true;
+      }
+
+      // Get unique molecular subtypes from tumor samples
+      const subtypes = new Set();
+      currentData.forEach(d => {
+        if (d.is_tumor && d.molecular_subtype && d.molecular_subtype.trim() !== '' && d.molecular_subtype !== 'NA') {
+          subtypes.add(d.molecular_subtype);
+        }
+      });
+      availableGroups.subtypes = Array.from(subtypes).sort();
+
+      // Initialize selectedGroups with all groups if empty
+      if (selectedGroups.size === 0) {
+        availableGroups.tumors.forEach(g => selectedGroups.add(g.key));
+        availableGroups.controls.forEach(g => selectedGroups.add(g.key));
+      }
+
+      // Leave selectedSubtypes empty by default (unchecked)
+
+      // Populate cohort checkboxes
+      const cohortContainer = document.getElementById('cohort-checkboxes');
+      cohortContainer.innerHTML = '';
+      availableGroups.cohorts.forEach(cohort => {
+        const item = document.createElement('div');
+        item.className = 'checkbox-item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `cohort-${cohort}`;
+        checkbox.checked = selectedCohorts.has(cohort);
+        checkbox.dataset.cohort = cohort;
+        checkbox.className = 'cohort-checkbox';
+
+        const label = document.createElement('label');
+        label.htmlFor = `cohort-${cohort}`;
+        label.textContent = cohort;
+        label.style.fontWeight = '500';
+
+        item.appendChild(checkbox);
+        item.appendChild(label);
+        cohortContainer.appendChild(item);
+      });
+
+      // Populate tumor checkboxes
+      const tumorContainer = document.getElementById('tumor-checkboxes');
+      tumorContainer.innerHTML = '';
+      const COHORT_ORDER = ['PBTA', 'TARGET', 'GMKF'];
+      const cohortRank = (c) => (COHORT_ORDER.indexOf(c) === -1 ? 99 : COHORT_ORDER.indexOf(c));
+      const sortedTumors = availableGroups.tumors.slice().sort((a, b) =>
+        cohortRank(a.cohort) - cohortRank(b.cohort) || a.key.localeCompare(b.key));
+      let lastTumorCohort = null;
+      sortedTumors.forEach(({ key: groupKey, cohort }) => {
+        if (cohort !== lastTumorCohort) {
+          const heading = document.createElement('div');
+          heading.className = 'group-heading';
+          heading.textContent = cohort;
+          tumorContainer.appendChild(heading);
+          lastTumorCohort = cohort;
+        }
+        const item = document.createElement('div');
+        item.className = 'checkbox-item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `tumor-${groupKey}`;
+        checkbox.checked = selectedGroups.has(groupKey);
+        checkbox.dataset.group = groupKey;
+        checkbox.dataset.cohort = cohort;
+        checkbox.className = 'group-checkbox';
+
+        const colorDiv = document.createElement('div');
+        colorDiv.className = 'color-indicator';
+        colorDiv.style.background = histologyColor(groupKey);
+
+        const label = document.createElement('label');
+        label.htmlFor = `tumor-${groupKey}`;
+        label.textContent = groupKey;
+
+        item.appendChild(checkbox);
+        item.appendChild(colorDiv);
+        item.appendChild(label);
+        tumorContainer.appendChild(item);
+      });
+
+      // Populate control checkboxes, grouped by cohort
+      const controlContainer = document.getElementById('control-checkboxes');
+      controlContainer.innerHTML = '';
+
+      // Group controls by cohort
+      const controlsByCohort = {};
+      availableGroups.controls.forEach(group => {
+        if (!controlsByCohort[group.cohort]) {
+          controlsByCohort[group.cohort] = [];
+        }
+        controlsByCohort[group.cohort].push(group);
+      });
+
+      // Render each cohort group
+      Object.entries(controlsByCohort).forEach(([cohort, groups]) => {
+        // Cohort header
+        const cohortHeader = document.createElement('div');
+        cohortHeader.className = 'group-heading';
+        cohortHeader.textContent = cohort;
+        controlContainer.appendChild(cohortHeader);
+
+        // Checkboxes for this cohort
+        groups.forEach(({ key: groupKey, cohort }) => {
+          const item = document.createElement('div');
+          item.className = 'checkbox-item';
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.id = `control-${groupKey}`;
+          checkbox.checked = selectedGroups.has(groupKey);
+          checkbox.dataset.group = groupKey;
+          checkbox.dataset.cohort = cohort;
+          checkbox.className = 'group-checkbox';
+
+          const colorDiv = document.createElement('div');
+          colorDiv.className = 'color-indicator';
+          colorDiv.style.background = controlCohortColor(cohort);
+
+          const label = document.createElement('label');
+          label.htmlFor = `control-${groupKey}`;
+          label.textContent = groupKey;
+
+          item.appendChild(checkbox);
+          item.appendChild(colorDiv);
+          item.appendChild(label);
+          controlContainer.appendChild(item);
+        });
+      });
+
+      // Populate molecular subtype checkboxes
+      const subtypeContainer = document.getElementById('subtype-checkboxes');
+      subtypeContainer.innerHTML = '';
+      availableGroups.subtypes.forEach(subtype => {
+        const item = document.createElement('div');
+        item.className = 'checkbox-item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `subtype-${subtype}`;
+        checkbox.checked = selectedSubtypes.has(subtype);
+        checkbox.dataset.subtype = subtype;
+        checkbox.className = 'subtype-checkbox';
+
+        const label = document.createElement('label');
+        label.htmlFor = `subtype-${subtype}`;
+        label.textContent = subtype;
+        label.style.fontSize = '0.9rem';
+
+        item.appendChild(checkbox);
+        item.appendChild(label);
+        subtypeContainer.appendChild(item);
+      });
+
+      // Update category toggle states
+      updateCategoryToggles();
+
+      // Add listeners to individual checkboxes to update category toggles
+      document.querySelectorAll('.cohort-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateCategoryToggles);
+      });
+
+      document.querySelectorAll('.group-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateCategoryToggles);
+      });
+
+      document.querySelectorAll('.subtype-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateCategoryToggles);
+      });
+    }
+
+    function updateCategoryToggles() {
+      // Cohort toggle
+      const cohortCheckboxes = document.querySelectorAll('#cohort-checkboxes .cohort-checkbox');
+      const cohortChecked = Array.from(cohortCheckboxes).filter(cb => cb.checked).length;
+      const cohortToggle = document.getElementById('toggle-all-cohorts');
+      if (cohortToggle) {
+        cohortToggle.checked = cohortChecked === cohortCheckboxes.length;
+        cohortToggle.indeterminate = cohortChecked > 0 && cohortChecked < cohortCheckboxes.length;
+      }
+
+      // Histology toggle (renamed from PBTA)
+      const pbtaCheckboxes = document.querySelectorAll('#tumor-checkboxes .group-checkbox');
+      const pbtaChecked = Array.from(pbtaCheckboxes).filter(cb => cb.checked).length;
+      const pbtaToggle = document.getElementById('toggle-all-pbta');
+      if (pbtaToggle) {
+        pbtaToggle.checked = pbtaChecked === pbtaCheckboxes.length;
+        pbtaToggle.indeterminate = pbtaChecked > 0 && pbtaChecked < pbtaCheckboxes.length;
+      }
+
+      // GTEx toggle
+      const gtexCheckboxes = document.querySelectorAll('#control-checkboxes .group-checkbox[data-cohort="GTEx (<40yo)"]');
+      const gtexChecked = Array.from(gtexCheckboxes).filter(cb => cb.checked).length;
+      const gtexToggle = document.getElementById('toggle-all-gtex');
+      if (gtexToggle) {
+        gtexToggle.checked = gtexChecked === gtexCheckboxes.length;
+        gtexToggle.indeterminate = gtexChecked > 0 && gtexChecked < gtexCheckboxes.length;
+      }
+
+      // Evo-devo toggle
+      const evodevoCheckboxes = document.querySelectorAll('#control-checkboxes .group-checkbox[data-cohort="Evo-devo"]');
+      const evodevoChecked = Array.from(evodevoCheckboxes).filter(cb => cb.checked).length;
+      const evodevoToggle = document.getElementById('toggle-all-evodevo');
+      if (evodevoToggle) {
+        evodevoToggle.checked = evodevoChecked === evodevoCheckboxes.length;
+        evodevoToggle.indeterminate = evodevoChecked > 0 && evodevoChecked < evodevoCheckboxes.length;
+      }
+
+      // Pediatric Brain toggle
+      const pedbrainCheckboxes = document.querySelectorAll('#control-checkboxes .group-checkbox[data-cohort="Pediatric Normal Brain"]');
+      const pedbrainChecked = Array.from(pedbrainCheckboxes).filter(cb => cb.checked).length;
+      const pedbrainToggle = document.getElementById('toggle-all-pedbrain');
+      if (pedbrainToggle) {
+        pedbrainToggle.checked = pedbrainChecked === pedbrainCheckboxes.length;
+        pedbrainToggle.indeterminate = pedbrainChecked > 0 && pedbrainChecked < pedbrainCheckboxes.length;
+      }
+
+      // Molecular subtype toggle
+      const subtypeCheckboxes = document.querySelectorAll('#subtype-checkboxes .subtype-checkbox');
+      const subtypeChecked = Array.from(subtypeCheckboxes).filter(cb => cb.checked).length;
+      const subtypeToggle = document.getElementById('toggle-all-subtypes');
+      if (subtypeToggle) {
+        subtypeToggle.checked = subtypeChecked === subtypeCheckboxes.length;
+        subtypeToggle.indeterminate = subtypeChecked > 0 && subtypeChecked < subtypeCheckboxes.length;
+      }
+    }
+
+    function applyGroupSelection() {
+      // Collect checked selections
+      selectedCohorts.clear();
+      selectedGroups.clear();
+      selectedSubtypes.clear();
+
+      document.querySelectorAll('#cohort-checkboxes input[type="checkbox"]:checked').forEach(cb => {
+        selectedCohorts.add(cb.dataset.cohort);
+      });
+
+      document.querySelectorAll('#tumor-checkboxes input[type="checkbox"]:checked').forEach(cb => {
+        selectedGroups.add(cb.dataset.group);
+      });
+
+      document.querySelectorAll('#control-checkboxes input[type="checkbox"]:checked').forEach(cb => {
+        selectedGroups.add(cb.dataset.group);
+      });
+
+      document.querySelectorAll('#subtype-checkboxes input[type="checkbox"]:checked').forEach(cb => {
+        selectedSubtypes.add(cb.dataset.subtype);
+      });
+
+      // Re-render plot with filtered data
+      if (currentData) renderPlot();
+
+      // Close modal
+      document.getElementById('config-modal').classList.remove('active');
+    }
+
+    // ===========================================================================
+    // Event listeners
+    // ===========================================================================
+
+    // Configuration modal
+    document.getElementById('configure-btn').addEventListener('click', () => {
+      populateConfigPanel();
+      document.getElementById('config-modal').classList.add('active');
+    });
+
+    document.getElementById('close-modal').addEventListener('click', () => {
+      document.getElementById('config-modal').classList.remove('active');
+    });
+
+    document.getElementById('select-all-btn').addEventListener('click', () => {
+      document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => {
+        cb.checked = true;
+      });
+    });
+
+    document.getElementById('deselect-all-btn').addEventListener('click', () => {
+      document.querySelectorAll('.checkbox-item input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+      });
+    });
+
+    document.getElementById('apply-config-btn').addEventListener('click', applyGroupSelection);
+
+    // Category toggle event listeners
+    document.getElementById('toggle-all-cohorts').addEventListener('change', (e) => {
+      document.querySelectorAll('#cohort-checkboxes .cohort-checkbox').forEach(cb => {
+        cb.checked = e.target.checked;
+      });
+      updateCategoryToggles();
+    });
+
+    document.getElementById('toggle-all-pbta').addEventListener('change', (e) => {
+      document.querySelectorAll('#tumor-checkboxes .group-checkbox').forEach(cb => {
+        cb.checked = e.target.checked;
+      });
+      updateCategoryToggles();
+    });
+
+    document.getElementById('toggle-all-gtex').addEventListener('change', (e) => {
+      document.querySelectorAll('#control-checkboxes .group-checkbox[data-cohort="GTEx (<40yo)"]').forEach(cb => {
+        cb.checked = e.target.checked;
+      });
+      updateCategoryToggles();
+    });
+
+    document.getElementById('toggle-all-evodevo').addEventListener('change', (e) => {
+      document.querySelectorAll('#control-checkboxes .group-checkbox[data-cohort="Evo-devo"]').forEach(cb => {
+        cb.checked = e.target.checked;
+      });
+      updateCategoryToggles();
+    });
+
+    document.getElementById('toggle-all-pedbrain').addEventListener('change', (e) => {
+      document.querySelectorAll('#control-checkboxes .group-checkbox[data-cohort="Pediatric Normal Brain"]').forEach(cb => {
+        cb.checked = e.target.checked;
+      });
+      updateCategoryToggles();
+    });
+
+    document.getElementById('toggle-all-subtypes').addEventListener('change', (e) => {
+      document.querySelectorAll('#subtype-checkboxes .subtype-checkbox').forEach(cb => {
+        cb.checked = e.target.checked;
+      });
+      updateCategoryToggles();
+    });
+
+    // Close modal when clicking outside
+    document.getElementById('config-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'config-modal') {
+        document.getElementById('config-modal').classList.remove('active');
+      }
+    });
+
+    document.getElementById('log2-toggle').addEventListener('change', () => {
+      if (currentData) renderPlot();
+    });
+
+    document.getElementById('split-subtypes-toggle').addEventListener('change', () => {
+      if (currentData) renderPlot();
+    });
+
+    document.getElementById('export-btn').addEventListener('click', () => {
+      if (!currentData || currentData.length === 0) return;
+
+      const format = document.getElementById('export-format').value;
+      const svg = buildExportSvg().node;
+      const gene = currentGene || 'plot';
+
+      if (format === 'svg') {
+        // Export as SVG
+        const serializer = new XMLSerializer();
+        const svgStr = serializer.serializeToString(svg);
+        const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${gene}_expression.svg`;
+        link.click();
+        URL.revokeObjectURL(url);
+      } else {
+        // Export as raster (PNG, JPG) or PDF
+        exportPlotAsImage(svg, gene, format);
+      }
+    });
+
+    function exportPlotAsImage(svg, gene, format) {
+      // Clone SVG and add font family to ensure proper rendering
+      const svgClone = svg.cloneNode(true);
+
+      // Set font-family on SVG to match UI (sans-serif)
+      svgClone.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
+      // Ensure all text elements use sans-serif
+      svgClone.querySelectorAll('text').forEach(text => {
+        text.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+      });
+
+      const svgData = new XMLSerializer().serializeToString(svgClone);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      // Get SVG dimensions and add minimal padding for rotated labels
+      const svgWidth = parseFloat(svg.getAttribute('width'));
+      const svgHeight = parseFloat(svg.getAttribute('height'));
+
+      // Add minimal padding to ensure rotated labels aren't cut off
+      const extraPadding = 20; // Minimal padding for edges
+
+      // Scale for 300 DPI (assuming 96 DPI screen, scale by ~3.125) for every raster/PDF format
+      const scale = 3.125;
+      canvas.width = (svgWidth + extraPadding) * scale;
+      canvas.height = (svgHeight + extraPadding) * scale;
+
+      // Create image from SVG
+      const img = new Image();
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+
+      img.onload = () => {
+        // Fill white background
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw SVG with offset for padding
+        const offset = extraPadding * scale / 2;
+        ctx.drawImage(img, offset, offset, svgWidth * scale, svgHeight * scale);
+        URL.revokeObjectURL(url);
+
+        if (format === 'pdf') {
+          // Export as PDF using jsPDF
+          exportAsPDF(canvas, gene);
+        } else {
+          // Export as PNG or JPG
+          const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
+          const ext = format === 'jpg' ? 'jpg' : 'png';
+          const quality = format === 'jpg' ? 0.95 : undefined;
+
+          canvas.toBlob((blob) => {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${gene}_expression.${ext}`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+          }, mimeType, quality);
+        }
+      };
+
+      img.src = url;
+    }
+
+    function exportAsPDF(canvas, gene) {
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+      // Use jsPDF for proper PDF export
+      const { jsPDF } = window.jspdf;
+
+      // Size the PDF page to the chart's actual physical size at 300 DPI,
+      // rather than stretching it to fill a fixed page size like A4.
+      const dpi = 300;
+      const pdfWidth = (canvas.width / dpi) * 25.4;
+      const pdfHeight = (canvas.height / dpi) * 25.4;
+
+      const pdf = new jsPDF({
+        orientation: pdfWidth >= pdfHeight ? 'landscape' : 'portrait',
+        unit: 'mm',
+        format: [pdfWidth, pdfHeight]
+      });
+
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`${gene}_expression.pdf`);
+    }
+
+    // ===========================================================================
+    // Initialize
+    // ===========================================================================
+
+    initDuckDB().catch((err) => showStatus(`Error initializing: ${err.message}`, true));
+  </script>
+</body>
+</html>
