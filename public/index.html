@@ -490,8 +490,8 @@
             <h3>Control Cohorts</h3>
             <div style="margin-bottom: 0.75rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap;">
               <span style="font-weight: 600; color: #666;">Order Evo-devo by:</span>
-              <label><input type="radio" name="evo-ordering" value="tissue" checked /> Tissue, then time</label>
-              <label><input type="radio" name="evo-ordering" value="time" /> Time, then tissue</label>
+              <label><input type="radio" name="evo-ordering" value="time" checked /> Time, then tissue</label>
+              <label><input type="radio" name="evo-ordering" value="tissue" /> Tissue, then time</label>
             </div>
             <div style="margin-bottom: 0.75rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap;">
               <span style="font-weight: 600; color: #666;">Group Evo-devo by:</span>
@@ -501,8 +501,8 @@
             </div>
             <div style="margin-bottom: 0.75rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap;">
               <span style="font-weight: 600; color: #666;">Group GTEx by:</span>
-              <label><input type="radio" name="gtex-grouping" value="narrow" checked /> Subgroup (narrow)</label>
-              <label><input type="radio" name="gtex-grouping" value="broad" /> Group (broad)</label>
+              <label><input type="radio" name="gtex-grouping" value="broad" checked /> Group (broad)</label>
+              <label><input type="radio" name="gtex-grouping" value="narrow" /> Subgroup (narrow)</label>
             </div>
             <div style="margin-bottom: 0.75rem;">
               <div style="font-weight: 600; color: #666; margin-bottom: 0.4rem;">Select by tissue category (GTEx and Evo-devo):</div>
@@ -677,11 +677,11 @@
     //   'narrow': plot_group ("Brain - Cerebellum", "Forebrain-4 Weeks Post Conception")
     //   'broad':  broad_group ("Brain", "Forebrain-Prenatal" / "Forebrain-Postnatal")
     //   'tissue': evo-devo only; every timepoint of a tissue in one group ("Forebrain")
-    // Evo-devo defaults to prenatal/postnatal per tissue; GTEx to subgroups. Tumors and
+    // Both default to broad (evo-devo prenatal/postnatal per tissue, GTEx whole tissues). Tumors and
     // pediatric brain are unaffected.
-    let controlGrouping = { gtex: 'narrow', evodevo: 'broad' };
+    let controlGrouping = { gtex: 'broad', evodevo: 'broad' };
     // Evo-devo box order: 'tissue' (tissue, then time) or 'time' (time, then tissue)
-    let evoOrdering = 'tissue';
+    let evoOrdering = 'time';
     function groupOf(d, modes = controlGrouping) {
       if (!d.is_control) return d.plot_group || 'Unknown';
       const isEvo = d.source_cohort === 'Evo-devo';
@@ -697,11 +697,11 @@
       const group = d.plot_group || 'Unknown';
       return d.cohort !== 'PBTA' ? `${d.cohort}:${group}` : group;
     }
-    // Controls shown by default: GTEx brain regions, pediatric brain, and evo-devo for every
-    // tissue when grouped by prenatal/postnatal or tissue. The many exact-timepoint evo-devo
-    // groups (and the other GTEx tissues) are opt-in; exact timepoints default to the brain.
-    function isDefaultControl(key, cohort) {
-      if (cohort === 'GTEx (<40yo)') return key.startsWith('Brain');
+    // Controls shown by default: every GTEx tissue when grouped as whole tissues (the narrow
+    // subgroups default to the brain regions), pediatric brain, and evo-devo for every tissue
+    // when grouped by prenatal/postnatal or tissue (exact timepoints default to the brain).
+    function isDefaultControl(key, cohort, modes = controlGrouping) {
+      if (cohort === 'GTEx (<40yo)') return modes.gtex === 'broad' || key.startsWith('Brain');
       if (cohort === 'Evo-devo') {
         const exactTimepoint = key.includes('-') && !key.endsWith('-Prenatal') && !key.endsWith('-Postnatal');
         return !exactTimepoint || key.startsWith('Forebrain') || key.startsWith('Hindbrain');
@@ -947,6 +947,11 @@
       const facetBuckets = FACET_ORDER
         .map((name) => {
           const facetGroups = groups.filter((g) => facetName(g) === name);
+
+          // Sort GTEx tissues alphabetically (they arrive in sample order otherwise)
+          if (name === "GTEx <40") {
+            facetGroups.sort((a, b) => a.label.localeCompare(b.label));
+          }
 
           // Sort evo-devo groups by developmental order
           if (name === "Evo-devo") {
@@ -1431,7 +1436,7 @@
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.id = `control-${cohort}-${groupKey}`;
-        checkbox.checked = checkedKeys ? checkedKeys.has(groupKey) : isDefaultControl(groupKey, cohort);
+        checkbox.checked = checkedKeys ? checkedKeys.has(groupKey) : isDefaultControl(groupKey, cohort, mode);
         checkbox.dataset.group = groupKey;
         checkbox.dataset.cohort = cohort;
         if (tissue) checkbox.dataset.tissue = tissue;
@@ -1529,7 +1534,7 @@
       // Initialize selectedGroups with all tumor groups and the default controls if empty
       if (selectedGroups.size === 0) {
         availableGroups.tumors.forEach(g => selectedGroups.add(g.key));
-        controlGroupsFor(controlGrouping).filter(g => isDefaultControl(g.key, g.cohort))
+        controlGroupsFor(controlGrouping).filter(g => isDefaultControl(g.key, g.cohort, controlGrouping))
           .forEach(g => selectedGroups.add(g.key));
       }
 
@@ -1798,7 +1803,7 @@
           document.querySelectorAll('#control-checkboxes .group-checkbox').forEach(cb => {
             if (cb.checked && cb.dataset.cohort !== cohort) keep.add(cb.dataset.group);
           });
-          controlGroupsFor(modes).filter(g => g.cohort === cohort && isDefaultControl(g.key, g.cohort))
+          controlGroupsFor(modes).filter(g => g.cohort === cohort && isDefaultControl(g.key, g.cohort, modes))
             .forEach(g => keep.add(g.key));
           renderControlCheckboxes(modes, keep);
         });
