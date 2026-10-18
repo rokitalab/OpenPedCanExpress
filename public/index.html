@@ -431,7 +431,7 @@
         <div class="modal-body">
           <div class="config-section" style="margin-bottom: 1rem;">
             <label style="font-weight: 600; color: #666;">
-              <input type="checkbox" id="show-n-toggle" />
+              <input type="checkbox" id="show-n-toggle" checked />
               Show sample count (N) in axis labels
             </label>
             <div style="margin-top: 0.75rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap;">
@@ -697,10 +697,15 @@
       const group = d.plot_group || 'Unknown';
       return d.cohort !== 'PBTA' ? `${d.cohort}:${group}` : group;
     }
-    // Controls shown by default: brain only (the full GTEx/evo-devo tissue set is opt-in).
+    // Controls shown by default: GTEx brain regions, pediatric brain, and evo-devo for every
+    // tissue when grouped by prenatal/postnatal or tissue. The many exact-timepoint evo-devo
+    // groups (and the other GTEx tissues) are opt-in; exact timepoints default to the brain.
     function isDefaultControl(key, cohort) {
       if (cohort === 'GTEx (<40yo)') return key.startsWith('Brain');
-      if (cohort === 'Evo-devo') return key.startsWith('Forebrain') || key.startsWith('Hindbrain');
+      if (cohort === 'Evo-devo') {
+        const exactTimepoint = key.includes('-') && !key.endsWith('-Prenatal') && !key.endsWith('-Postnatal');
+        return !exactTimepoint || key.startsWith('Forebrain') || key.startsWith('Hindbrain');
+      }
       return true;
     }
 
@@ -754,7 +759,7 @@
         }
 
         currentData = rows;
-        // First load: build the selection (default controls = brain only) before plotting
+        // First load: build the selection (default controls: see isDefaultControl) before plotting
         if (selectedGroups.size === 0) populateConfigPanel();
         clearStatus();
         renderPlot();
@@ -985,7 +990,7 @@
     // Draws the chart into `svg` at the given pixel size, given already-computed
     // facetBuckets/groups (from computeFacetBuckets). Used for both the on-screen
     // render and the (independently sized) export render.
-    function drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize = BASE_FONT_SIZE) {
+    function drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize = BASE_FONT_SIZE, autoGrowHeight = false) {
       const xform = (tpm) => log2Scale ? Math.log2(tpm + 1) : tpm;
       const margin = marginForFontSize(fontSize);
       // Widen the left margin when a long leftmost label would be cut off (capped so the plot area stays usable)
@@ -998,7 +1003,6 @@
       const facetLabelSize = fontSize + 1;
       const axisTitleSize = fontSize + 4;
 
-      svg.attr('width', width).attr('height', height);
       svg.selectAll('*').remove();
 
       const iW = width - margin.left - margin.right;
@@ -1008,15 +1012,45 @@
       measureCtx.font = `600 ${facetLabelSize}px ${getComputedStyle(document.body).fontFamily}`;
       const labelMode = facetLabelMode();
       const usableW0 = Math.max(iW - FACET_GAP * Math.max(0, facetBuckets.length - 1), 0);
+      const lineH = facetLabelSize + 3;
+      // Best two-line split of a label at a space (balanced widths), or null for one word
+      const wrapLabel = (name) => {
+        const words = name.split(' ');
+        let best = null;
+        for (let k = 1; k < words.length; k++) {
+          const lines = [words.slice(0, k).join(' '), words.slice(k).join(' ')];
+          const w = Math.max(...lines.map((l) => measureCtx.measureText(l).width));
+          if (!best || w < best.w) best = { lines, w };
+        }
+        return best;
+      };
       const facetLabelInfo = facetBuckets.map((f) => {
         const textW = measureCtx.measureText(f.name).width;
         const facetW = usableW0 * (f.groups.length / groups.length);
-        const rotate = labelMode === 'rotated' || (labelMode === 'auto' && textW + 8 > facetW);
-        return { textW, rotate };
+        let lines = [f.name];
+        let rotate = labelMode === 'rotated';
+        if (labelMode === 'auto' && textW + 8 > facetW) {
+          // Too wide for one line: break it after a word (e.g. "Pediatric" / "Brain")
+          // when that fits (it may overhang into the gap between facets); else rotate.
+          const wrapped = wrapLabel(f.name);
+          if (wrapped && wrapped.w <= facetW + FACET_GAP - 4) lines = wrapped.lines;
+          else rotate = true;
+        }
+        return { textW, rotate, lines };
       });
       const stripH = labelMode === 'hidden'
         ? 8
-        : Math.max(FACET_STRIP_H, ...facetLabelInfo.map((i) => (i.rotate ? i.textW + 12 : 0)));
+        : Math.max(
+            FACET_STRIP_H,
+            ...facetLabelInfo.map((i) => (i.rotate ? i.textW + 12 : (i.lines.length > 1 ? i.lines.length * lineH + 6 : 0))));
+
+      // On screen, grow the figure rather than squeeze the plot area when the labels need room
+      if (autoGrowHeight) {
+        const minPlotH = 220;
+        const spare = height - margin.top - margin.bottom - stripH;
+        if (spare < minPlotH) height += minPlotH - spare;
+      }
+      svg.attr('width', width).attr('height', height);
       const iH = height - margin.top - margin.bottom - stripH;
 
       // Y scale (shared across facets)
@@ -1078,21 +1112,29 @@
           sum + usableWidth * (fb.groups.length / groups.length) + FACET_GAP, 0));
         const facetW = usableWidth * (f.groups.length / groups.length);
 
-        // Facet label text (omitted when hidden; rotated labels read bottom to top)
+        // Facet label text (omitted when hidden; rotated labels read bottom to top;
+        // wrapped labels stack their lines above the underline)
         if (labelMode !== 'hidden') {
           const info = facetLabelInfo[i];
           const label = root.append('text')
             .attr('font-size', facetLabelSize)
             .attr('font-weight', 600)
-            .attr('fill', '#333')
-            .text(f.name);
+            .attr('fill', '#333');
           if (info.rotate) {
             const lx = facetX + facetW / 2 + facetLabelSize * 0.35;
-            label.attr('x', lx).attr('y', -8)
+            label.text(f.name).attr('x', lx).attr('y', -8)
               .attr('text-anchor', 'start')
               .attr('transform', `rotate(-90, ${lx}, -8)`);
+          } else if (info.lines.length > 1) {
+            label.attr('text-anchor', 'middle');
+            info.lines.forEach((line, k) => {
+              label.append('tspan')
+                .attr('x', facetX + facetW / 2)
+                .attr('y', -6 - (info.lines.length - 1 - k) * lineH)
+                .text(line);
+            });
           } else {
-            label.attr('x', facetX + facetW / 2)
+            label.text(f.name).attr('x', facetX + facetW / 2)
               .attr('y', -FACET_STRIP_H / 2 - 2)
               .attr('text-anchor', 'middle');
           }
@@ -1209,7 +1251,7 @@
       const height = 500;
 
       const svg = d3.select('#plot-svg');
-      drawChart(svg, width, height, facetBuckets, groups, log2Scale);
+      drawChart(svg, width, height, facetBuckets, groups, log2Scale, BASE_FONT_SIZE, true);
 
       // Update title
       document.getElementById('plot-title').textContent = `${currentGene} Expression`;
@@ -1341,7 +1383,7 @@
     }
 
     // Rebuilds the control checkboxes for the grouping modes ({gtex, evodevo}). `checkedKeys`
-    // is the set of group keys to tick (a Set or null for the default brain-only selection).
+    // is the set of group keys to tick (a Set or null for the default selection).
     function renderControlCheckboxes(mode, checkedKeys) {
       const controlContainer = document.getElementById('control-checkboxes');
       controlContainer.innerHTML = '';
@@ -1746,7 +1788,7 @@
     }
 
     // Changing one cohort's grouping rebuilds the control list: that cohort goes back to its
-    // default (brain-only) selection and the other cohorts keep what is ticked.
+    // default selection and the other cohorts keep what is ticked.
     [['gtex-grouping', 'GTEx (<40yo)'], ['evodevo-grouping', 'Evo-devo']].forEach(([name, cohort]) => {
       document.querySelectorAll(`input[name="${name}"]`).forEach(radio => {
         radio.addEventListener('change', () => {
