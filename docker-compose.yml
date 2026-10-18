@@ -8,7 +8,8 @@ services:
     image: openpedcanexpress-preprocessing:latest
     container_name: openpedcanexpress-build
     volumes:
-      # Source data (read-only); see data/source/README.md for the file list
-      - ./data/source:/app/data/source:ro
+      # Source data; see data/source/README.md for the file list. Not read-only: the
+      # converted expression Parquet files are written to data/source/parquet/.
+      - ./data/source:/app/data/source
       # Output: Parquet files and manifest.json are written here
       - ./data/partitions:/app/data/partitions

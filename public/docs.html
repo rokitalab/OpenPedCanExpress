@@ -50,7 +50,7 @@
       <li><strong>Boxes.</strong> Each box spans the first to third quartile with a line at the median. Whiskers extend to the most extreme values within 1.5 × the interquartile range of the box.</li>
       <li><strong>Points.</strong> Every sample is drawn as a point, jittered horizontally so overlapping samples stay visible. Hover over a point to see its sample ID and value.</li>
       <li><strong>Y-axis.</strong> By default, values are log<sub>2</sub>(TPM + 1). Uncheck the <code>log₂ scale</code> option to see raw TPM. The y-axis is shared across all facets so groups can be compared directly.</li>
-      <li><strong>Sorting.</strong> Tumor groups can be sorted alphabetically or by median expression (high to low, or low to high). Evo-devo groups are always in developmental order.</li>
+      <li><strong>Sorting.</strong> Tumor groups can be sorted alphabetically or by median expression (high to low, or low to high). GTEx tissues are alphabetical. Evo-devo groups follow <code>Order Evo-devo by</code> (developmental time, then tissue, by default).</li>
     </ul>
 
     <h2 id="configure">Configuring sample groups</h2>
@@ -59,7 +59,14 @@
       <li><code>Cohorts</code>. All cohorts (<code>PBTA</code>, <code>TARGET</code>, and <code>GMKF</code>) are shown by default, each in its own facet. Uncheck a cohort to hide it.</li>
       <li><code>Histologies</code>. Tumor groups, listed under their cohort heading.</li>
       <li><code>Molecular subtypes</code>. Select subtypes to plot those samples separately. <code>Split by molecular subtype</code> divides every tumor group by subtype.</li>
-      <li><code>Control cohorts</code>. Choose GTEx, Evo-devo, and pediatric normal brain groups. Evo-devo is grouped as prenatal and postnatal for each tissue by default; <code>Group Evo-devo by</code> also offers exact timepoints or one box per tissue, and <code>Group GTEx by</code> offers whole tissues (default) or subgroups; the tissue category, <code>All &lt;tissue&gt;</code>, and prenatal/postnatal checkboxes select many groups at once; and <code>Order Evo-devo by</code> sets the plot order. By default the plot shows all GTEx tissues, pediatric brain, and evo-devo prenatal and postnatal boxes for all seven tissues.</li>
+      <li><code>Control cohorts</code>. Choose GTEx, Evo-devo, and pediatric normal brain groups. By default the plot shows all GTEx tissues, pediatric brain, and evo-devo prenatal and postnatal boxes for all seven tissues.
+        <ul>
+          <li><code>Group Evo-devo by</code>: <code>Prenatal / Postnatal for each tissue</code> (default), <code>Exact timepoint</code>, or <code>Tissue only</code> (one box per tissue). See <a href="#control-groups">Control groups</a>.</li>
+          <li><code>Group GTEx by</code>: <code>Group</code> (whole tissues, default) or <code>Subgroup</code> (for example <code>Brain - Cerebellum</code>).</li>
+          <li><code>Order Evo-devo by</code>: <code>Time, then tissue</code> (default; all prenatal boxes, then all postnatal) or <code>Tissue, then time</code> (each tissue's timepoints together).</li>
+          <li>Select many groups at once with the tissue category checkboxes (such as <code>Reproductive Organs</code> or <code>Skin/Fat</code>), the <code>All &lt;tissue&gt;</code> checkboxes, and, for evo-devo exact timepoints, the prenatal only and postnatal only checkboxes.</li>
+        </ul>
+      </li>
     </ul>
     <p><code>Top facet labels</code> controls the cohort labels above the plot (<code>PBTA</code>, <code>TARGET</code>, ...). <code>Auto</code> puts a multi-word label on two lines when it is too wide for its facet (for example Pediatric over Brain) and rotates it only when it still does not fit, for example a cohort with one group; you can also force horizontal or rotated labels, or hide them.</p>
     <p><code>Show sample count (N) in axis labels</code> (on by default) adds each group's number of samples to its label, for example <code>Forebrain-Prenatal (N=32)</code>. The counts update with your selections, including when you split by molecular subtype, and appear in exported plots.</p>
@@ -104,6 +111,19 @@
     <ul>
       <li><code>PBTA</code>. Histology groups come from <a href="https://tapestry.rokitalab.com" target="_blank" rel="noopener">TAPESTRY</a>, so colors and groups match across Rokita Lab tools.</li>
       <li><code>TARGET</code> and <code>GMKF</code>. Samples are grouped by OpenPedCan <code>cancer_group</code>. Groups with 3 or fewer samples are not shown, and <code>Ganglioneuroblastoma</code> is combined with <code>Neuroblastoma</code>. The mapping is in <code>plot-groups.tsv</code>.</li>
+    </ul>
+
+    <h3 id="control-groups">Control groups</h3>
+    <ul>
+      <li><strong>GTEx.</strong> The group is the tissue (30 groups, for example <code>Brain</code> or <code>Adipose</code>); the subgroup is the specific site (53 subgroups, for example <code>Brain - Cerebellum</code> or <code>Adipose - Subcutaneous</code>).</li>
+      <li><strong>Evo-devo.</strong> Labels are <code>&lt;tissue&gt;-&lt;timepoint&gt;</code>, for example <code>Forebrain-4 Weeks Post Conception</code> or <code>Heart-Neonate</code>. The prenatal/postnatal grouping combines all post-conception weeks (4-19) into <code>&lt;tissue&gt;-Prenatal</code> and Neonate through Elderly into <code>&lt;tissue&gt;-Postnatal</code>. <code>Tissue only</code> puts every timepoint of a tissue in one box.</li>
+      <li><strong>Tissue categories</strong> (used by the category checkboxes):
+        <code>Brain &amp; Nerve</code> (Brain, Nerve, Forebrain, Hindbrain),
+        <code>Reproductive Organs</code> (Ovary, Testis, Uterus, Vagina, Prostate, Fallopian Tube, Cervix),
+        <code>Skin/Fat</code> (Skin, Adipose),
+        <code>Heart &amp; Blood</code> (Heart, Blood and arteries, Spleen),
+        <code>Digestive</code> (Colon, Esophagus, Small Intestine, Stomach, Liver, Pancreas, Minor Salivary Gland),
+        <code>Kidney &amp; Bladder</code>, <code>Endocrine</code> (Adrenal Gland, Thyroid, Pituitary), <code>Lung</code>, <code>Muscle</code>, <code>Breast</code>, and <code>Cell Lines</code> (cultured fibroblasts and EBV-transformed lymphocytes).</li>
     </ul>
 
     <h2 id="glossary">Glossary</h2>

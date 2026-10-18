@@ -31,11 +31,12 @@ Contact the Rokita Lab or OpenPedCan data maintainers for access to the required
 
 ## After placing files here
 
-Run the preprocessing script to generate the Parquet files:
+Run the two preprocessing scripts to generate the Parquet files:
 
 ```bash
 cd ../..  # back to repo root
-Rscript scripts/01-build-expression-parquet.R
+Rscript scripts/00-convert-source-to-parquet.R   # one time: RDS matrices -> data/source/parquet/
+Rscript scripts/01-build-expression-parquet.R    # join metadata, write data/partitions/
 ```
 
-This will create partitioned Parquet files in `data/partitions/` that the web app loads.
+The first script only needs to be rerun when an expression matrix changes. The second creates the partitioned Parquet files in `data/partitions/` that the web app loads. To refresh the neuroblastoma subtypes from the OpenPedCan-Project subtyping branch, run `Rscript scripts/update-nbl-subtypes.R` before the second script (see item 10).

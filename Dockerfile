@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install R packages
-RUN R -e "install.packages(c('nanoparquet', 'jsonlite', 'here'), repos='https://cloud.r-project.org')"
+RUN R -e "install.packages(c('DBI', 'duckdb', 'jsonlite', 'here'), repos='https://cloud.r-project.org')"
 
 # Copy scripts
 COPY scripts/ /app/scripts/
@@ -22,6 +22,6 @@ COPY scripts/ /app/scripts/
 # Set working directory
 WORKDIR /app
 
-# Default command: run preprocessing script
+# Default command: convert the expression matrices to Parquet, then build the partitions
 # Mount data at /app/data when running container
-CMD ["Rscript", "scripts/01-build-expression-parquet.R"]
+CMD ["sh", "-c", "Rscript scripts/00-convert-source-to-parquet.R && Rscript scripts/01-build-expression-parquet.R"]
