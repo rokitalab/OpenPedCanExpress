@@ -29,12 +29,14 @@ jobs:
           commit_message: 'Deploy PR #${{ github.event.pull_request.number }} preview'
 
       # Pushes made with GITHUB_TOKEN do not trigger other workflows, so start the
-      # Pages deploy (which publishes gh-pages-dev at /dev/) explicitly.
+      # Pages deploy (which publishes gh-pages-dev at /dev/) explicitly. Run it on main:
+      # the github-pages environment only allows deployments from main, and the deploy
+      # job checks out gh-pages-dev itself, so it does not need the PR branch.
       - name: Publish preview to /dev/
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run deploy.yml --repo "${{ github.repository }}" --ref "${{ github.head_ref }}"
+        run: gh workflow run deploy.yml --repo "${{ github.repository }}" --ref main
 
       # Comment once, when the PR is opened; later pushes update the preview silently.
       - name: Comment PR with preview URL
