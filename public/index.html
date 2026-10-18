@@ -597,7 +597,7 @@
       const dataParam = new URLSearchParams(location.search).get('data');
       const S3_BUCKET_URL = dataParam === 'local'
         ? 'http://127.0.0.1:8081'
-        : `${S3_BASE_URL}/${/^v[\d.]+$/.test(dataParam || '') ? dataParam : 'v1.1.0'}`;
+        : `${S3_BASE_URL}/${/^v[\d.]+$/.test(dataParam || '') ? dataParam : 'v1.2.0'}`;
 
       const partitions = [
         'genes_A-H.parquet',
