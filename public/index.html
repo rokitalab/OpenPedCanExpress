@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpenPedCanExpress — Pediatric Brain Tumor Gene Expression Explorer</title>
+  <title>OpenPedCanExpress — Pediatric Tumor vs. Normal Gene Expression Explorer</title>
   <meta name="description" content="Interactive browser-based tool for exploring gene expression across pediatric brain tumors and normal tissue controls">
 
   <!-- D3.js -->
@@ -429,6 +429,20 @@
           <button class="close-btn" id="close-modal">&times;</button>
         </div>
         <div class="modal-body">
+          <div class="config-section" style="margin-bottom: 1rem;">
+            <label style="font-weight: 600; color: #666;">
+              <input type="checkbox" id="show-n-toggle" />
+              Show sample count (N) in axis labels
+            </label>
+            <div style="margin-top: 0.75rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap;">
+              <span style="font-weight: 600; color: #666;">Top facet labels (PBTA, TARGET, ...):</span>
+              <label><input type="radio" name="facet-labels" value="auto" checked /> Auto (rotate if they do not fit)</label>
+              <label><input type="radio" name="facet-labels" value="horizontal" /> Horizontal</label>
+              <label><input type="radio" name="facet-labels" value="rotated" /> Rotated</label>
+              <label><input type="radio" name="facet-labels" value="hidden" /> Hidden</label>
+            </div>
+          </div>
+
           <div class="config-section">
             <h3>Tumors</h3>
 
@@ -474,6 +488,21 @@
 
           <div class="config-section" style="border-top: 2px solid #e0e0e0; padding-top: 1.5rem;">
             <h3>Control Cohorts</h3>
+            <div style="margin-bottom: 0.75rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap;">
+              <span style="font-weight: 600; color: #666;">Order Evo-devo by:</span>
+              <label><input type="radio" name="evo-ordering" value="tissue" checked /> Tissue, then time</label>
+              <label><input type="radio" name="evo-ordering" value="time" /> Time, then tissue</label>
+            </div>
+            <div style="margin-bottom: 0.75rem; display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap;">
+              <span style="font-weight: 600; color: #666;">Group GTEx &amp; Evo-devo by:</span>
+              <label><input type="radio" name="control-grouping" value="narrow" checked /> Subgroup (narrow)</label>
+              <label><input type="radio" name="control-grouping" value="broad" /> Group (broad)</label>
+              <label><input type="radio" name="control-grouping" value="tissue" /> Tissue only (Evo-devo: all timepoints in one box)</label>
+            </div>
+            <div style="margin-bottom: 0.75rem;">
+              <div style="font-weight: 600; color: #666; margin-bottom: 0.4rem;">Select by tissue category (GTEx and Evo-devo):</div>
+              <div id="category-toggles" style="display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem;"></div>
+            </div>
             <div style="margin-bottom: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;">
               <label style="font-weight: 600; color: #666;">
                 <input type="checkbox" id="toggle-all-gtex" checked />
@@ -525,7 +554,7 @@
     // ===========================================================================
 
     import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm';
-    import { histologyColor, controlCohortColor, groupColor, facetName, FACET_ORDER, evoDevoOrder } from './tapestry-colors.js';
+    import { histologyColor, controlCohortColor, groupColor, facetName, FACET_ORDER, evoDevoOrder, TISSUE_CATEGORIES, tissueCategory } from './tapestry-colors.js';
 
     let db = null;
     let conn = null;
@@ -562,10 +591,13 @@
 
       // Register Parquet files from S3
       // Add ?data=local to the page URL to read locally rebuilt Parquet files
-      // (served on port 8081) instead of the published S3 copy.
-      const S3_BUCKET_URL = new URLSearchParams(location.search).get('data') === 'local'
+      // (served on port 8081) instead of the published S3 copy, or ?data=v1.2.0
+      // (any version folder name) to read another S3 release.
+      const S3_BASE_URL = 'https://bti-openaccess-us-east-1-prd-rokita-lab.s3.us-east-1.amazonaws.com/opc-express';
+      const dataParam = new URLSearchParams(location.search).get('data');
+      const S3_BUCKET_URL = dataParam === 'local'
         ? 'http://127.0.0.1:8081'
-        : 'https://bti-openaccess-us-east-1-prd-rokita-lab.s3.us-east-1.amazonaws.com/opc-express/v1.1.0';
+        : `${S3_BASE_URL}/${/^v[\d.]+$/.test(dataParam || '') ? dataParam : 'v1.1.0'}`;
 
       const partitions = [
         'genes_A-H.parquet',
@@ -636,6 +668,35 @@
     const plotGroupBySample = new Map();
     let currentData = null;
 
+    // How control (GTEx / Evo-devo) samples are grouped: 'narrow' uses plot_group
+    // (e.g. "Brain - Cerebellum", "Forebrain-4 Weeks Post Conception"); 'broad' uses
+    // broad_group (e.g. "Brain", "Forebrain-Prenatal"); 'tissue' puts every timepoint of an
+    // evo-devo tissue in one group ("Forebrain") and is the same as 'broad' for GTEx.
+    // Tumors and pediatric brain are unaffected.
+    let controlGrouping = 'narrow';
+    // Evo-devo box order: 'tissue' (tissue, then time) or 'time' (time, then tissue)
+    let evoOrdering = 'tissue';
+    function groupOf(d, mode = controlGrouping) {
+      if (d.is_control && mode !== 'narrow') {
+        const broad = d.broad_group || d.plot_group || 'Unknown';
+        return mode === 'tissue' && d.source_cohort === 'Evo-devo' ? broad.split('-')[0] : broad;
+      }
+      return d.plot_group || 'Unknown';
+    }
+    // Selection key of a tumor's plot group. Non-PBTA cohorts are prefixed with their
+    // cohort so the same group name in two cohorts (e.g. "Neuroblastoma" in TARGET and
+    // GMKF) is selected independently, matching how the plot separates them.
+    function tumorKey(d) {
+      const group = d.plot_group || 'Unknown';
+      return d.cohort !== 'PBTA' ? `${d.cohort}:${group}` : group;
+    }
+    // Controls shown by default: brain only (the full GTEx/evo-devo tissue set is opt-in).
+    function isDefaultControl(key, cohort) {
+      if (cohort === 'GTEx (<40yo)') return key.startsWith('Brain');
+      if (cohort === 'Evo-devo') return key.startsWith('Forebrain') || key.startsWith('Hindbrain');
+      return true;
+    }
+
     document.getElementById('gene-search').addEventListener('keypress', async (e) => {
       if (e.key === 'Enter') {
         const gene = e.target.value.trim().toUpperCase();
@@ -662,6 +723,7 @@
             tpm,
             source_cohort,
             plot_group,
+            broad_group,
             cohort,
             molecular_subtype,
             is_tumor,
@@ -685,6 +747,8 @@
         }
 
         currentData = rows;
+        // First load: build the selection (default controls = brain only) before plotting
+        if (selectedGroups.size === 0) populateConfigPanel();
         clearStatus();
         renderPlot();
         document.getElementById('export-btn').disabled = false;
@@ -735,12 +799,46 @@
     // the user-chosen export font size relative to this.
     const BASE_FONT_SIZE = 14;
 
+    // How the facet labels above the plot (PBTA, TARGET, GMKF, ...) are shown: 'auto' rotates
+    // a label only when it is wider than its facet (e.g. a facet with a single group),
+    // 'horizontal' and 'rotated' force one orientation, 'hidden' removes the text.
+    function facetLabelMode() {
+      return document.querySelector('input[name="facet-labels"]:checked').value;
+    }
+
+    // Whether axis labels include each group's sample count; read from the Configure panel
+    // so the on-screen plot and the export both follow it.
+    function showGroupN() {
+      return document.getElementById('show-n-toggle').checked;
+    }
+
+    // The x labels are rotated 45 degrees and end at their tick, so a long label on one of
+    // the leftmost groups extends left past the y axis. Returns the left margin those labels
+    // need (px), measured with the chart font. `step` is the approximate pixels per group,
+    // since each group further right leaves more room for its label.
+    let measureCtx = null;
+    function leftLabelOverhang(facetBuckets, fontSize, step) {
+      if (!facetBuckets.length) return 0;
+      if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+      measureCtx.font = `${fontSize}px ${getComputedStyle(document.body).fontFamily}`;
+      const withN = showGroupN();
+      const firstGroups = facetBuckets[0].groups.slice(0, 8);
+      let need = 0;
+      firstGroups.forEach((g, i) => {
+        const text = withN ? `${g.label} (N=${g.n})` : g.label;
+        const extent = measureCtx.measureText(text).width * Math.SQRT1_2 + 0.8 * fontSize + 8;
+        need = Math.max(need, extent - (i + 0.5) * step);
+      });
+      return Math.ceil(need);
+    }
+
     function marginForFontSize(fontSize) {
       const s = fontSize / BASE_FONT_SIZE;
       return {
         top: MARGIN.top,
         right: MARGIN.right,
-        bottom: Math.round(MARGIN.bottom * s),
+        // Labels with " (N=123)" are longer, so leave more room for them
+        bottom: Math.round((MARGIN.bottom + (showGroupN() ? 40 : 0)) * s),
         left: Math.round(MARGIN.left * s)
       };
     }
@@ -758,8 +856,7 @@
       const filteredData = currentData.filter(d => {
         // Controls: filter by selectedGroups
         if (d.is_control) {
-          const groupKey = d.plot_group || 'Unknown';
-          return selectedGroups.size === 0 || selectedGroups.has(groupKey);
+          return selectedGroups.size === 0 || selectedGroups.has(groupOf(d));
         }
 
         // Tumors: filter by cohort first
@@ -768,7 +865,7 @@
         }
 
         // Then check plot_group and molecular_subtype
-        const groupKey = d.plot_group || 'Unknown';
+        const groupKey = tumorKey(d);
         const hasValidSubtype = d.molecular_subtype && d.molecular_subtype !== 'NA' && d.molecular_subtype.trim() !== '';
 
         // If tumor has a selected molecular subtype, include it
@@ -783,7 +880,7 @@
       // Group by plot_group (and optionally molecular_subtype for tumors)
       // For controls, include source_cohort to avoid name collisions (e.g., GTEx "Cerebellum" vs Pediatric "Cerebellum")
       const grouped = d3.group(filteredData, d => {
-        const baseGroup = d.plot_group || 'Unknown';
+        const baseGroup = groupOf(d);
         const hasValidSubtype = d.is_tumor && d.molecular_subtype &&
                                 d.molecular_subtype !== 'NA' && d.molecular_subtype.trim() !== '';
 
@@ -818,7 +915,8 @@
         label: (values[0].is_control || (values[0].is_tumor && values[0].cohort !== 'PBTA'))
           ? key.slice(key.indexOf(':') + 1)
           : key,
-        plot_group: values[0].plot_group || key,
+        plot_group: groupOf(values[0]),
+        n: values.length,  // samples in this group (one row per sample for the searched gene)
         values: values.map(v => ({ ...v, tpm_transformed: xform(v.tpm) })),
         is_tumor: values[0].is_tumor,
         is_control: values[0].is_control,
@@ -840,7 +938,7 @@
 
           // Sort evo-devo groups by developmental order
           if (name === "Evo-devo") {
-            facetGroups.sort((a, b) => evoDevoOrder(a.plot_group) - evoDevoOrder(b.plot_group));
+            facetGroups.sort((a, b) => evoDevoOrder(a.plot_group, evoOrdering) - evoDevoOrder(b.plot_group, evoOrdering));
           }
 
           // Sort tumor groups based on selected option
@@ -883,6 +981,11 @@
     function drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize = BASE_FONT_SIZE) {
       const xform = (tpm) => log2Scale ? Math.log2(tpm + 1) : tpm;
       const margin = marginForFontSize(fontSize);
+      // Widen the left margin when a long leftmost label would be cut off (capped so the plot area stays usable)
+      const approxStep = (width - margin.left - margin.right) / Math.max(groups.length, 1);
+      margin.left = Math.round(Math.min(
+        Math.max(margin.left, leftLabelOverhang(facetBuckets, fontSize, approxStep)),
+        width * 0.4));
       const xTickSize = fontSize;
       const yTickSize = fontSize + 2;
       const facetLabelSize = fontSize + 1;
@@ -892,7 +995,22 @@
       svg.selectAll('*').remove();
 
       const iW = width - margin.left - margin.right;
-      const iH = height - margin.top - margin.bottom - FACET_STRIP_H;
+
+      // Facet label layout: orientation per facet, and the strip height it needs
+      if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+      measureCtx.font = `600 ${facetLabelSize}px ${getComputedStyle(document.body).fontFamily}`;
+      const labelMode = facetLabelMode();
+      const usableW0 = Math.max(iW - FACET_GAP * Math.max(0, facetBuckets.length - 1), 0);
+      const facetLabelInfo = facetBuckets.map((f) => {
+        const textW = measureCtx.measureText(f.name).width;
+        const facetW = usableW0 * (f.groups.length / groups.length);
+        const rotate = labelMode === 'rotated' || (labelMode === 'auto' && textW + 8 > facetW);
+        return { textW, rotate };
+      });
+      const stripH = labelMode === 'hidden'
+        ? 8
+        : Math.max(FACET_STRIP_H, ...facetLabelInfo.map((i) => (i.rotate ? i.textW + 12 : 0)));
+      const iH = height - margin.top - margin.bottom - stripH;
 
       // Y scale (shared across facets)
       const allVals = currentData.map(d => xform(d.tpm));
@@ -916,7 +1034,7 @@
       });
 
       const root = svg.append('g')
-        .attr('transform', `translate(${margin.left},${margin.top + FACET_STRIP_H})`);
+        .attr('transform', `translate(${margin.left},${margin.top + stripH})`);
 
       // Grid lines
       root.append('g')
@@ -953,15 +1071,25 @@
           sum + usableWidth * (fb.groups.length / groups.length) + FACET_GAP, 0));
         const facetW = usableWidth * (f.groups.length / groups.length);
 
-        // Facet label text
-        root.append('text')
-          .attr('x', facetX + facetW / 2)
-          .attr('y', -FACET_STRIP_H / 2 - 2)
-          .attr('text-anchor', 'middle')
-          .attr('font-size', facetLabelSize)
-          .attr('font-weight', 600)
-          .attr('fill', '#333')
-          .text(f.name);
+        // Facet label text (omitted when hidden; rotated labels read bottom to top)
+        if (labelMode !== 'hidden') {
+          const info = facetLabelInfo[i];
+          const label = root.append('text')
+            .attr('font-size', facetLabelSize)
+            .attr('font-weight', 600)
+            .attr('fill', '#333')
+            .text(f.name);
+          if (info.rotate) {
+            const lx = facetX + facetW / 2 + facetLabelSize * 0.35;
+            label.attr('x', lx).attr('y', -8)
+              .attr('text-anchor', 'start')
+              .attr('transform', `rotate(-90, ${lx}, -8)`);
+          } else {
+            label.attr('x', facetX + facetW / 2)
+              .attr('y', -FACET_STRIP_H / 2 - 2)
+              .attr('text-anchor', 'middle');
+          }
+        }
 
         // Underline
         root.append('line')
@@ -974,7 +1102,8 @@
       });
 
       // X axis labels (per facet)
-      const labelForKey = new Map(groups.map((g) => [g.key, g.label]));
+      const withN = showGroupN();
+      const labelForKey = new Map(groups.map((g) => [g.key, withN ? `${g.label} (N=${g.n})` : g.label]));
       facetBuckets.forEach((f) => {
         root.append('g')
           .attr('transform', `translate(0,${iH})`)
@@ -1093,6 +1222,7 @@
 
       const groupCount = groups.length;
       const margin = marginForFontSize(fontSize);
+      margin.left = Math.max(margin.left, leftLabelOverhang(facetBuckets, fontSize, boxWidth));
       const facetGapTotal = FACET_GAP * Math.max(0, facetBuckets.length - 1);
       const width = margin.left + margin.right + facetGapTotal + groupCount * boxWidth;
 
@@ -1138,6 +1268,170 @@
     let cohortsInitialized = false;
     let availableGroups = { tumors: [], controls: [], subtypes: [], cohorts: [] }; // Available groups from data
 
+    // Unique control groups ({key, cohort}) for a grouping mode, sorted by cohort then key.
+    function controlGroupsFor(mode) {
+      const seen = new Map();
+      currentData.forEach(d => {
+        if (!d.is_control) return;
+        const key = groupOf(d, mode);
+        if (!seen.has(`${d.source_cohort}:${key}`)) seen.set(`${d.source_cohort}:${key}`, { key, cohort: d.source_cohort });
+      });
+      return Array.from(seen.values()).sort((a, b) =>
+        a.cohort.localeCompare(b.cohort) || (a.cohort === 'Evo-devo'
+          ? evoDevoOrder(a.key) - evoDevoOrder(b.key) // always tissue-major here; evoOrdering only orders the plot
+          : a.key.localeCompare(b.key)));
+    }
+
+    // Tissue a control group belongs to, for the per-tissue "select all" toggles:
+    // Evo-devo "Forebrain-4 Weeks Post Conception" -> "Forebrain";
+    // GTEx "Brain - Amygdala" -> "Brain". Other controls have no tissue.
+    function tissueOf(cohort, key) {
+      if (cohort === 'Evo-devo') return key.split('-')[0];
+      if (cohort === 'GTEx (<40yo)') return key.split(' - ')[0];
+      return null;
+    }
+
+    // Developmental stage of an evo-devo group, for the per-tissue prenatal/postnatal toggles:
+    // "Forebrain-4 Weeks Post Conception" / "Forebrain-Prenatal" -> "Prenatal", other
+    // "Forebrain-<stage>" -> "Postnatal"; a bare tissue ("Forebrain") has none.
+    function stageOf(cohort, key) {
+      if (cohort !== 'Evo-devo' || !key.includes('-')) return null;
+      const time = key.slice(key.indexOf('-') + 1);
+      return (time === 'Prenatal' || time.includes('Post Conception')) ? 'Prenatal' : 'Postnatal';
+    }
+
+    // Group checkboxes of a tissue (and optionally one developmental stage of it)
+    function toggleMembers(cohort, tissue, stage) {
+      return Array.from(document.querySelectorAll('#control-checkboxes .group-checkbox')).filter(cb =>
+        cb.dataset.cohort === cohort && cb.dataset.tissue === tissue && (!stage || cb.dataset.stage === stage));
+    }
+
+    // A "select all" row for a tissue (stage = null) or one stage of a tissue
+    function addToggleRow(container, cohort, tissue, stage, text, indent) {
+      const row = document.createElement('div');
+      row.className = 'checkbox-item';
+      row.style.gridColumn = '1 / -1';
+      row.style.fontWeight = '600';
+      row.style.color = '#666';
+      if (indent) row.style.paddingLeft = '1.5rem';
+      const toggle = document.createElement('input');
+      toggle.type = 'checkbox';
+      toggle.id = `tissue-${cohort}-${tissue}${stage ? `-${stage}` : ''}`;
+      toggle.className = 'tissue-toggle';
+      toggle.dataset.cohort = cohort;
+      toggle.dataset.tissue = tissue;
+      if (stage) toggle.dataset.stage = stage;
+      toggle.addEventListener('change', () => {
+        toggleMembers(cohort, tissue, stage).forEach(cb => { cb.checked = toggle.checked; });
+        updateCategoryToggles();
+      });
+      const tl = document.createElement('label');
+      tl.htmlFor = toggle.id;
+      tl.textContent = text;
+      row.appendChild(toggle);
+      row.appendChild(tl);
+      container.appendChild(row);
+    }
+
+    // Rebuilds the control checkboxes for a grouping mode. `checkedKeys` is the set
+    // of group keys to tick (a Set or null for the default brain-only selection).
+    function renderControlCheckboxes(mode, checkedKeys) {
+      const controlContainer = document.getElementById('control-checkboxes');
+      controlContainer.innerHTML = '';
+      availableGroups.controls = controlGroupsFor(mode);
+
+      const tissueCounts = new Map();
+      const stageCounts = new Map();
+      availableGroups.controls.forEach(({ key, cohort }) => {
+        const t = tissueOf(cohort, key);
+        if (t) tissueCounts.set(`${cohort}:${t}`, (tissueCounts.get(`${cohort}:${t}`) || 0) + 1);
+        const st = stageOf(cohort, key);
+        if (t && st) stageCounts.set(`${cohort}:${t}:${st}`, (stageCounts.get(`${cohort}:${t}:${st}`) || 0) + 1);
+      });
+
+      let lastCohort = null;
+      let lastTissue = null;
+      availableGroups.controls.forEach(({ key: groupKey, cohort }) => {
+        if (cohort !== lastCohort) {
+          const cohortHeader = document.createElement('div');
+          cohortHeader.className = 'group-heading';
+          cohortHeader.textContent = cohort;
+          controlContainer.appendChild(cohortHeader);
+          lastCohort = cohort;
+          lastTissue = null;
+        }
+
+        // Per-tissue "all" toggle (only when the tissue has more than one group),
+        // then, for evo-devo, "all prenatal" / "all postnatal" toggles for the tissue
+        const tissue = tissueOf(cohort, groupKey);
+        if (tissue && tissue !== lastTissue && tissueCounts.get(`${cohort}:${tissue}`) > 1) {
+          addToggleRow(controlContainer, cohort, tissue, null, `All ${tissue}`, false);
+          ['Prenatal', 'Postnatal'].forEach(st => {
+            const n = stageCounts.get(`${cohort}:${tissue}:${st}`) || 0;
+            // Only worthwhile when the stage has several groups and is not the whole tissue
+            if (n > 1 && n < tissueCounts.get(`${cohort}:${tissue}`)) {
+              addToggleRow(controlContainer, cohort, tissue, st, `${tissue} ${st.toLowerCase()} only`, true);
+            }
+          });
+        }
+        lastTissue = tissue;
+
+        const item = document.createElement('div');
+        item.className = 'checkbox-item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `control-${cohort}-${groupKey}`;
+        checkbox.checked = checkedKeys ? checkedKeys.has(groupKey) : isDefaultControl(groupKey, cohort);
+        checkbox.dataset.group = groupKey;
+        checkbox.dataset.cohort = cohort;
+        if (tissue) checkbox.dataset.tissue = tissue;
+        const stage = stageOf(cohort, groupKey);
+        if (stage) checkbox.dataset.stage = stage;
+        const category = tissue ? tissueCategory(tissue) : null;
+        if (category) checkbox.dataset.category = category;
+        checkbox.className = 'group-checkbox';
+        checkbox.addEventListener('change', updateCategoryToggles);
+
+        const colorDiv = document.createElement('div');
+        colorDiv.className = 'color-indicator';
+        colorDiv.style.background = controlCohortColor(cohort);
+
+        const label = document.createElement('label');
+        label.htmlFor = checkbox.id;
+        label.textContent = groupKey;
+
+        item.appendChild(checkbox);
+        item.appendChild(colorDiv);
+        item.appendChild(label);
+        controlContainer.appendChild(item);
+      });
+
+      // Tissue category toggles (only categories that have groups in this view)
+      const categoryContainer = document.getElementById('category-toggles');
+      categoryContainer.innerHTML = '';
+      const present = new Set(Array.from(controlContainer.querySelectorAll('.group-checkbox'))
+        .map(cb => cb.dataset.category).filter(Boolean));
+      Object.keys(TISSUE_CATEGORIES).filter(c => present.has(c)).forEach(category => {
+        const label = document.createElement('label');
+        label.style.fontWeight = '500';
+        const toggle = document.createElement('input');
+        toggle.type = 'checkbox';
+        toggle.className = 'category-toggle';
+        toggle.dataset.category = category;
+        toggle.addEventListener('change', () => {
+          controlContainer.querySelectorAll('.group-checkbox').forEach(cb => {
+            if (cb.dataset.category === category) cb.checked = toggle.checked;
+          });
+          updateCategoryToggles();
+        });
+        label.appendChild(toggle);
+        label.appendChild(document.createTextNode(` ${category}`));
+        categoryContainer.appendChild(label);
+      });
+      updateCategoryToggles();
+    }
+
     function populateConfigPanel() {
       if (!currentData || currentData.length === 0) return;
 
@@ -1151,11 +1445,14 @@
         cohort: values[0].cohort
       }));
 
-      availableGroups.tumors = groups.filter(g => g.is_tumor).map(g => ({ key: g.key, cohort: g.cohort })).sort((a, b) => a.key.localeCompare(b.key));
-      availableGroups.controls = groups.filter(g => g.is_control).map(g => {
-        const groupData = groups.find(gd => gd.key === g.key);
-        return { key: g.key, cohort: groupData.source_cohort };
-      }).sort((a, b) => a.key.localeCompare(b.key));
+      const tumorGroups = new Map();
+      currentData.forEach(d => {
+        if (!d.is_tumor) return;
+        const key = tumorKey(d);
+        if (!tumorGroups.has(key)) tumorGroups.set(key, { key, label: d.plot_group || 'Unknown', cohort: d.cohort });
+      });
+      availableGroups.tumors = Array.from(tumorGroups.values()).sort((a, b) => a.key.localeCompare(b.key));
+      availableGroups.controls = []; // built per grouping mode in controlGroupsFor()
 
       // Get unique tumor cohorts
       const cohorts = new Set();
@@ -1180,10 +1477,11 @@
       });
       availableGroups.subtypes = Array.from(subtypes).sort();
 
-      // Initialize selectedGroups with all groups if empty
+      // Initialize selectedGroups with all tumor groups and the default controls if empty
       if (selectedGroups.size === 0) {
         availableGroups.tumors.forEach(g => selectedGroups.add(g.key));
-        availableGroups.controls.forEach(g => selectedGroups.add(g.key));
+        controlGroupsFor(controlGrouping).filter(g => isDefaultControl(g.key, g.cohort))
+          .forEach(g => selectedGroups.add(g.key));
       }
 
       // Leave selectedSubtypes empty by default (unchecked)
@@ -1220,7 +1518,7 @@
       const sortedTumors = availableGroups.tumors.slice().sort((a, b) =>
         cohortRank(a.cohort) - cohortRank(b.cohort) || a.key.localeCompare(b.key));
       let lastTumorCohort = null;
-      sortedTumors.forEach(({ key: groupKey, cohort }) => {
+      sortedTumors.forEach(({ key: groupKey, label: groupLabel, cohort }) => {
         if (cohort !== lastTumorCohort) {
           const heading = document.createElement('div');
           heading.className = 'group-heading';
@@ -1241,11 +1539,11 @@
 
         const colorDiv = document.createElement('div');
         colorDiv.className = 'color-indicator';
-        colorDiv.style.background = histologyColor(groupKey);
+        colorDiv.style.background = histologyColor(groupLabel);
 
         const label = document.createElement('label');
         label.htmlFor = `tumor-${groupKey}`;
-        label.textContent = groupKey;
+        label.textContent = groupLabel;
 
         item.appendChild(checkbox);
         item.appendChild(colorDiv);
@@ -1254,53 +1552,9 @@
       });
 
       // Populate control checkboxes, grouped by cohort
-      const controlContainer = document.getElementById('control-checkboxes');
-      controlContainer.innerHTML = '';
-
-      // Group controls by cohort
-      const controlsByCohort = {};
-      availableGroups.controls.forEach(group => {
-        if (!controlsByCohort[group.cohort]) {
-          controlsByCohort[group.cohort] = [];
-        }
-        controlsByCohort[group.cohort].push(group);
-      });
-
-      // Render each cohort group
-      Object.entries(controlsByCohort).forEach(([cohort, groups]) => {
-        // Cohort header
-        const cohortHeader = document.createElement('div');
-        cohortHeader.className = 'group-heading';
-        cohortHeader.textContent = cohort;
-        controlContainer.appendChild(cohortHeader);
-
-        // Checkboxes for this cohort
-        groups.forEach(({ key: groupKey, cohort }) => {
-          const item = document.createElement('div');
-          item.className = 'checkbox-item';
-
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.id = `control-${groupKey}`;
-          checkbox.checked = selectedGroups.has(groupKey);
-          checkbox.dataset.group = groupKey;
-          checkbox.dataset.cohort = cohort;
-          checkbox.className = 'group-checkbox';
-
-          const colorDiv = document.createElement('div');
-          colorDiv.className = 'color-indicator';
-          colorDiv.style.background = controlCohortColor(cohort);
-
-          const label = document.createElement('label');
-          label.htmlFor = `control-${groupKey}`;
-          label.textContent = groupKey;
-
-          item.appendChild(checkbox);
-          item.appendChild(colorDiv);
-          item.appendChild(label);
-          controlContainer.appendChild(item);
-        });
-      });
+      document.querySelector(`input[name="control-grouping"][value="${controlGrouping}"]`).checked = true;
+      document.querySelector(`input[name="evo-ordering"][value="${evoOrdering}"]`).checked = true;
+      renderControlCheckboxes(controlGrouping, selectedGroups);
 
       // Populate molecular subtype checkboxes
       const subtypeContainer = document.getElementById('subtype-checkboxes');
@@ -1362,6 +1616,23 @@
         pbtaToggle.indeterminate = pbtaChecked > 0 && pbtaChecked < pbtaCheckboxes.length;
       }
 
+      // Tissue category toggles
+      document.querySelectorAll('#category-toggles .category-toggle').forEach(toggle => {
+        const members = Array.from(document.querySelectorAll('#control-checkboxes .group-checkbox'))
+          .filter(cb => cb.dataset.category === toggle.dataset.category);
+        const n = members.filter(cb => cb.checked).length;
+        toggle.checked = members.length > 0 && n === members.length;
+        toggle.indeterminate = n > 0 && n < members.length;
+      });
+
+      // Per-tissue (and per-stage) toggles (GTEx / Evo-devo)
+      document.querySelectorAll('#control-checkboxes .tissue-toggle').forEach(toggle => {
+        const members = toggleMembers(toggle.dataset.cohort, toggle.dataset.tissue, toggle.dataset.stage);
+        const n = members.filter(cb => cb.checked).length;
+        toggle.checked = members.length > 0 && n === members.length;
+        toggle.indeterminate = n > 0 && n < members.length;
+      });
+
       // GTEx toggle
       const gtexCheckboxes = document.querySelectorAll('#control-checkboxes .group-checkbox[data-cohort="GTEx (<40yo)"]');
       const gtexChecked = Array.from(gtexCheckboxes).filter(cb => cb.checked).length;
@@ -1413,6 +1684,8 @@
         selectedGroups.add(cb.dataset.group);
       });
 
+      controlGrouping = document.querySelector('input[name="control-grouping"]:checked').value;
+      evoOrdering = document.querySelector('input[name="evo-ordering"]:checked').value;
       document.querySelectorAll('#control-checkboxes input[type="checkbox"]:checked').forEach(cb => {
         selectedGroups.add(cb.dataset.group);
       });
@@ -1455,6 +1728,13 @@
     });
 
     document.getElementById('apply-config-btn').addEventListener('click', applyGroupSelection);
+
+    // Switching narrow/broad rebuilds the control list with its default (brain-only) selection
+    document.querySelectorAll('input[name="control-grouping"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        if (currentData) renderControlCheckboxes(e.target.value, null);
+      });
+    });
 
     // Category toggle event listeners
     document.getElementById('toggle-all-cohorts').addEventListener('change', (e) => {
@@ -1512,6 +1792,16 @@
 
     document.getElementById('split-subtypes-toggle').addEventListener('change', () => {
       if (currentData) renderPlot();
+    });
+
+    document.getElementById('show-n-toggle').addEventListener('change', () => {
+      if (currentData) renderPlot();
+    });
+
+    document.querySelectorAll('input[name="facet-labels"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        if (currentData) renderPlot();
+      });
     });
 
     document.getElementById('export-btn').addEventListener('click', () => {
