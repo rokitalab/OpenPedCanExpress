@@ -1,5 +1,9 @@
-# Allow subdirectories
-!*/
-
-# Except this file
+# Large data files are not committed. Only README/config files are tracked.
+# (Replaces the previous "allow everything" rules, which un-ignored data/source/.)
+*
 !.gitignore
+!*/
+!source/README.md
+!source/molecular-subtype-overrides.tsv
+!partitions/.gitignore
+!partitions/md5sum.txt

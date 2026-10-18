@@ -70,3 +70,5 @@ node_modules/
 # Editor directories
 .vscode/
 .idea/
+public/index.html.backup
+preprocessing_output.log
