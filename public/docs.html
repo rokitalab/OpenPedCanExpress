@@ -59,8 +59,10 @@
       <li><code>Cohorts</code>. All cohorts (<code>PBTA</code>, <code>TARGET</code>, and <code>GMKF</code>) are shown by default, each in its own facet. Uncheck a cohort to hide it.</li>
       <li><code>Histologies</code>. Tumor groups, listed under their cohort heading.</li>
       <li><code>Molecular subtypes</code>. Select subtypes to plot those samples separately. <code>Split by molecular subtype</code> divides every tumor group by subtype.</li>
-      <li><code>Control cohorts</code>. Choose GTEx, Evo-devo, and pediatric normal brain groups.</li>
+      <li><code>Control cohorts</code>. Choose GTEx, Evo-devo, and pediatric normal brain groups. Use <code>Group GTEx &amp; Evo-devo by</code> for subgroups (narrow), groups (broad), or one evo-devo box per tissue; the tissue category, <code>All &lt;tissue&gt;</code>, and prenatal/postnatal checkboxes select many groups at once; and <code>Order Evo-devo by</code> sets the plot order. Brain controls are shown by default.</li>
     </ul>
+    <p><code>Top facet labels</code> controls the cohort labels above the plot (<code>PBTA</code>, <code>TARGET</code>, ...). <code>Auto</code> rotates a label only when it is too wide for its facet, for example a cohort with one group; you can also force horizontal or rotated labels, or hide them.</p>
+    <p>Check <code>Show sample count (N) in axis labels</code> at the top to add each group's number of samples to its label, for example <code>Forebrain-Prenatal (N=32)</code>. The counts update with your selections, including when you split by molecular subtype, and appear in exported plots.</p>
     <p>Click <code>Apply</code> to update the plot.</p>
 
     <h2 id="export">Exporting plots</h2>
@@ -83,16 +85,17 @@
       <li>RNA-Seq tumor samples from the <code>PBTA</code>, <code>TARGET</code>, and <code>GMKF</code> cohorts.</li>
       <li>Only independent primary specimens are used (one per participant within each cohort), from the OpenPedCan independent specimens list for each cohort.</li>
       <li><code>PBTA</code> neuroblastoma specimens are excluded.</li>
+      <li>Neuroblastoma <code>MYCN</code> subtypes come from the OpenPedCan-Project subtyping branch (<code>rokita/subtyping-integrate</code>).</li>
     </ul>
 
     <h3>Normal controls</h3>
     <table>
       <tr><th>Control</th><th>Description</th><th>Data access</th></tr>
-      <tr><td>GTEx &lt;40</td><td>GTEx brain regions, donors aged 20–39</td>
+      <tr><td>GTEx &lt;40</td><td>GTEx tissues (all, including brain regions), donors aged 20–39, samples that passed QC</td>
         <td><a href="https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=phs000424.v11.p2" target="_blank" rel="noopener">dbGaP phs000424</a></td></tr>
       <tr><td>Pediatric Brain</td><td>Non-neoplastic pediatric tissue: Cerebellum, Cortex, Pituitary, Pons</td>
         <td><a href="https://www.ncbi.nlm.nih.gov/bioproject/PRJNA1019377" target="_blank" rel="noopener">BioProject PRJNA1019377</a></td></tr>
-      <tr><td>Evo-devo</td><td>Developmental brain from 4 weeks post-conception through elderly</td>
+      <tr><td>Evo-devo</td><td>Developmental Forebrain, Hindbrain, Heart, Kidney, Liver, Ovary, and Testis from 4 weeks post-conception through elderly</td>
         <td><a href="https://www.ebi.ac.uk/biostudies/arrayexpress/studies/E-MTAB-6814" target="_blank" rel="noopener">ArrayExpress E-MTAB-6814</a></td></tr>
     </table>
     <p>The same control cohorts are used in <a href="https://tapestry.rokitalab.com" target="_blank" rel="noopener">TAPESTRY</a>.</p>

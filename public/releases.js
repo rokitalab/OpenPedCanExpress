@@ -1,11 +1,34 @@
 // OpenPedCanExpress release history (newest first).
-// Versions match the data folders on S3 (v1, v1.1.0). NOTE: dates are provisional.
+// Versions match the data folders on S3 (v1, v1.1.0, v1.2.0). NOTE: dates are provisional.
 
 export const RELEASES = [
   {
+    version: "v1.2.0",
+    date: "2026-10-18",
+    current: true,
+    summary:
+      "`GTEx` and evo-devo controls now cover all tissues (not only brain), `PBTA` plot groups are updated to the current TAPESTRY groups, and neuroblastoma `MYCN` subtypes are updated.",
+    changes: [
+      "`GTEx <40` now includes all tissues: 2,481 samples from donors aged 20-39 across 30 tissue groups (53 subgroups). Only samples that passed QC (those in `gtex-histologies.tsv`) are used. Previously only brain regions were included.",
+      "Evo-devo now includes all seven tissues: Forebrain, Hindbrain, Heart, Kidney, Liver, Ovary, and Testis (312 samples). Previously only Forebrain and Hindbrain were included.",
+      "Evo-devo labels now match TAPESTRY and include the tissue, for example `Forebrain-4 Weeks Post Conception` and `Heart-Neonate` (`Newborn` is now `Neonate`, and `Week` is now `Weeks`).",
+      "New `Group GTEx & Evo-devo by` options in `Configure Sample Groups`: `Subgroup (narrow)` (for example `Brain - Cerebellum`, or tissue plus exact timepoint), `Group (broad)` (for example `Brain`, or tissue plus `Prenatal` or `Postnatal`), and `Tissue only` (one evo-devo box per tissue covering all timepoints).",
+      "New ways to select control groups: an `All <tissue>` checkbox for each GTEx and evo-devo tissue, `prenatal only` and `postnatal only` checkboxes for each evo-devo tissue, and tissue categories (such as `Reproductive Organs` and `Skin/Fat`) that select related GTEx and evo-devo tissues together.",
+      "New `Show sample count (N) in axis labels` option in `Configure Sample Groups`, for example `Forebrain-Prenatal (N=32)`. The counts follow the groups you select and how you group them, and are included in exports.",
+      "New `Order Evo-devo by` option: `Tissue, then time` or `Time, then tissue` (for example all prenatal groups, then all postnatal groups).",
+      "The first view shows brain controls only (GTEx brain regions, Forebrain, Hindbrain, and pediatric brain). Select other tissues in `Configure Sample Groups`.",
+      "`PBTA` plot groups now come from the current TAPESTRY cohort histologies (v3). New groups: `Pineoblastoma` and `Rare CNS tumor`; `Schwannoma` is now `Schwannoma/MPNST`; `Other tumor` is no longer used. `PBTA` now has 1,276 samples (1,284 in v1.1.0).",
+      "Neuroblastoma `MYCN` subtypes are updated from the OpenPedCan-Project subtyping branch (`rokita/subtyping-integrate`). `MYCN` status now uses copy number amplification, then the clinical report, then expression. About 110 `TARGET` and `GMKF` specimens that were `NBL, MYCN amplified` in `OpenPedCan v15` are now `NBL, MYCN non-amplified`; their clinical status is non-amplified and their `MYCN` expression is low. Counts shown: `GMKF` 23 amplified and 173 non-amplified, `TARGET` 32 amplified and 117 non-amplified. This replaces the v1.1.0 correction for participant PASXIE.",
+      "New `Top facet labels` option in `Configure Sample Groups` for the labels above the plot (`PBTA`, `TARGET`, `GMKF`, ...): `Auto` (the default) rotates a label only when it does not fit over its facet, such as a cohort with a single group; `Horizontal` and `Rotated` force one orientation; `Hidden` removes the labels. It also applies to exports.",
+      "Fixed the leftmost x-axis label being cut off on the left when there are many groups or long labels. The plot and exports now widen the left margin to fit it.",
+      "Fixed the `TARGET` `Neuroblastoma` group missing from `Configure Sample Groups`: groups with the same name in different cohorts are now listed and selected separately.",
+      "Expression files are larger (about 1.2 GB across three files, 312 million rows) because of the added tissues. The app still reads only the parts it needs for the gene you search. Files are now sorted by gene.",
+      "The page title now reads `Pediatric Tumor vs. Normal Gene Expression Explorer`.",
+    ],
+  },
+  {
     version: "v1.1.0",
     date: "2026-10-04",
-    current: true,
     summary:
       "Expression data from `OpenPedCan v15`, with `TARGET` and `GMKF` tumor cohorts added, tumor samples restricted to independent RNA-Seq specimens, and new documentation.",
     changes: [
