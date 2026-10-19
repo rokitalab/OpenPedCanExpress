@@ -17,7 +17,7 @@ export const HISTOLOGY_COLORS = {
   "Other CNS embryonal tumor":        "#b08ccf",
   "Other high-grade glioma":          "#ffccf5",
   "Pineoblastoma":                    "#FF2900",
-  "Rare CNS tumor":                   "#b5b5b5",
+  "Rare CNS tumor":                   "#9F0B62",
   "Schwannoma/MPNST":                 "#ab7200",
 
   // Non-CNS tumor groups from TARGET and GMKF (cancer_group)
