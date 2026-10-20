@@ -1320,10 +1320,16 @@
       const tooltip = document.getElementById('tooltip');
       const value = isLog2 ? Math.log2(dataPoint.tpm + 1) : dataPoint.tpm;
       const label = isLog2 ? 'log₂(TPM+1)' : 'TPM';
+      const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+      // Molecular subtype (tumors), unless the group label already shows it (split by subtype)
+      const subtype = dataPoint.molecular_subtype;
+      const hasSubtype = subtype && subtype !== 'NA' && String(subtype).trim() !== '' && !group.includes(subtype);
 
       tooltip.innerHTML = `
-        <strong>${dataPoint.sample_id}</strong><br/>
-        ${group}<br/>
+        <strong>${esc(dataPoint.sample_id)}</strong><br/>
+        ${esc(group)}<br/>
+        ${hasSubtype ? `Subtype: ${esc(subtype)}<br/>` : ''}
         ${label}: ${value.toFixed(3)}
       `;
 

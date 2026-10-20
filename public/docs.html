@@ -48,7 +48,7 @@
     <ul>
       <li><strong>Facets.</strong> Groups are arranged in facets: tumor cohorts first (<code>PBTA</code>, <code>TARGET</code>, <code>GMKF</code>), then normal controls (Pediatric Brain, Evo-devo, GTEx &lt;40). Facet widths are proportional to the number of groups.</li>
       <li><strong>Boxes.</strong> Each box spans the first to third quartile with a line at the median. Whiskers extend to the most extreme values within 1.5 × the interquartile range of the box.</li>
-      <li><strong>Points.</strong> Every sample is drawn as a point, jittered horizontally so overlapping samples stay visible. Hover over a point to see its sample ID and value.</li>
+      <li><strong>Points.</strong> Every sample is drawn as a point, jittered horizontally so overlapping samples stay visible. Hover over a point to see its sample ID, group, molecular subtype (for tumors), and value.</li>
       <li><strong>Y-axis.</strong> By default, values are log<sub>2</sub>(TPM + 1). Uncheck the <code>log₂ scale</code> option to see raw TPM. The y-axis is shared across all facets so groups can be compared directly.</li>
       <li><strong>Sorting.</strong> Tumor groups can be sorted alphabetically or by median expression (high to low, or low to high). GTEx tissues are alphabetical. Evo-devo groups follow <code>Order Evo-devo by</code> (developmental time, then tissue, by default).</li>
     </ul>
@@ -110,7 +110,7 @@
 
     <h2 id="groups">Plot groups</h2>
     <ul>
-      <li><code>PBTA</code>. Histology groups come from <a href="https://tapestry.rokitalab.com" target="_blank" rel="noopener">TAPESTRY</a>, so colors and groups match across Rokita Lab tools.</li>
+      <li><code>PBTA</code>. Histology groups and molecular subtypes come from <a href="https://tapestry.rokitalab.com" target="_blank" rel="noopener">TAPESTRY</a>, so colors, groups and subtypes match across Rokita Lab tools.</li>
       <li><code>TARGET</code> and <code>GMKF</code>. Samples are grouped by OpenPedCan <code>cancer_group</code>. Groups with 3 or fewer samples are not shown, and <code>Ganglioneuroblastoma</code> is combined with <code>Neuroblastoma</code>. The mapping is in <code>plot-groups.tsv</code>.</li>
     </ul>
 

@@ -152,13 +152,16 @@ tumor_metadata_opc <- openpedcan_histologies %>%
   ) %>%
   select(-molecular_subtype_override)
 
-# PBTA plot groups come from the current TAPESTRY cohort-histologies.tsv.
+# PBTA plot groups and molecular subtypes come from the current TAPESTRY
+# cohort-histologies.tsv, so a sample's group and subtype agree (the release
+# histologies.tsv has older subtype labels, e.g. "EWS" where TAPESTRY has
+# "Rare CNS, EWS").
 tumor_metadata_tapestry <- tapestry_histologies %>%
   select(
     sample_id = Kids_First_Biospecimen_ID,
-    plot_group_tapestry = plot_group
-  ) %>%
-  select(sample_id, plot_group_tapestry)
+    plot_group_tapestry = plot_group,
+    molecular_subtype_tapestry = molecular_subtype
+  )
 
 # ==============================================================================
 # Sample metadata for all cohorts (one row per sample per matrix)
@@ -184,7 +187,13 @@ meta_tumor <- tumor_metadata_opc %>%
       plot_group_tapestry,
       coalesce(plot_group_tapestry, short_histology)
     ),
-    plot_group = if_else(plot_group == "DIPG or DMG", "Diffuse midline glioma", plot_group)
+    plot_group = if_else(plot_group == "DIPG or DMG", "Diffuse midline glioma", plot_group),
+    # PBTA: the TAPESTRY subtype where it has one, else the release's
+    molecular_subtype = if_else(
+      cohort == "PBTA",
+      coalesce(molecular_subtype_tapestry, molecular_subtype),
+      molecular_subtype
+    )
   ) %>%
   filter(!is.na(plot_group)) %>%
   mutate(
