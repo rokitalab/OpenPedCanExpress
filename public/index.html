@@ -718,11 +718,11 @@
       const group = d.plot_group || 'Unknown';
       return d.cohort !== 'PBTA' ? `${d.cohort}:${group}` : group;
     }
-    // Controls shown by default: every GTEx tissue when grouped as whole tissues (the narrow
-    // subgroups default to the brain regions), pediatric brain, and evo-devo for every tissue
-    // when grouped by prenatal/postnatal or tissue (exact timepoints default to the brain).
+    // Controls shown by default: every GTEx tissue (also with the narrow subgroups, so tissues
+    // without subgroups are not dropped), pediatric brain, and evo-devo for every tissue when
+    // grouped by prenatal/postnatal or tissue (exact timepoints default to the brain).
     function isDefaultControl(key, cohort, modes = controlGrouping) {
-      if (cohort === 'GTEx (<40yo)') return modes.gtex === 'broad' || key.startsWith('Brain');
+      if (cohort === 'GTEx (<40yo)') return true;
       if (cohort === 'Evo-devo') {
         const exactTimepoint = key.includes('-') && !key.endsWith('-Prenatal') && !key.endsWith('-Postnatal');
         return !exactTimepoint || key.startsWith('Forebrain') || key.startsWith('Hindbrain');
@@ -1024,6 +1024,14 @@
       margin.left = Math.round(Math.min(
         Math.max(margin.left, leftLabelOverhang(facetBuckets, fontSize, approxStep)),
         width * 0.4));
+      // The rotated x labels hang below the axis, so give the bottom margin room for the longest
+      // one (long histology + subtype labels were being cut off at the bottom of the figure)
+      if (!measureCtx) measureCtx = document.createElement('canvas').getContext('2d');
+      measureCtx.font = `${fontSize}px ${getComputedStyle(document.body).fontFamily}`;
+      const nInLabels = showGroupN();
+      const longestLabelW = Math.max(0, ...groups.map((g) =>
+        measureCtx.measureText(nInLabels ? `${g.label} (N=${g.n})` : g.label).width));
+      margin.bottom = Math.max(margin.bottom, Math.ceil(longestLabelW * Math.SQRT1_2 + 0.8 * fontSize + 12));
       const xTickSize = fontSize;
       const yTickSize = fontSize + 2;
       const facetLabelSize = fontSize + 1;
@@ -1323,9 +1331,9 @@
       margin.left = Math.max(margin.left, leftLabelOverhang(facetBuckets, fontSize, boxWidth));
       const facetGapTotal = FACET_GAP * Math.max(0, facetBuckets.length - 1);
       const width = margin.left + margin.right + facetGapTotal + groupCount * boxWidth;
-      drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize);
+      drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize, true);
 
-      return { node: svg.node(), width, height };
+      return { node: svg.node(), width, height: +svg.attr('height') };
     }
 
     // ===========================================================================
