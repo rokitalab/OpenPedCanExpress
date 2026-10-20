@@ -615,10 +615,26 @@
         'genes_Q-Z.parquet'
       ];
 
+      // Browsers cache the large Parquet files by URL, and S3 sends no cache headers, so after
+      // the files in a release folder are replaced a browser can keep reading byte ranges of
+      // the old copy ("No magic bytes found at end of file"). The manifest is small and is
+      // always fetched fresh; its generation time goes on the Parquet URLs so a re-upload
+      // changes the URL and forces a fresh download.
+      let revision = '';
+      try {
+        const manifestResp = await fetch(`${S3_BUCKET_URL}/manifest.json`, { cache: 'no-store' });
+        if (manifestResp.ok) {
+          const manifest = await manifestResp.json();
+          if (manifest.generated_at) revision = `?r=${encodeURIComponent(manifest.generated_at)}`;
+        }
+      } catch (e) {
+        console.warn('Could not read manifest.json; loading the Parquet files without a revision:', e);
+      }
+
       // Create a unified view by querying all partitions
       let viewQuery = 'CREATE OR REPLACE VIEW expr_data AS ';
       for (let i = 0; i < partitions.length; i++) {
-        const fileUrl = `${S3_BUCKET_URL}/${partitions[i]}`;
+        const fileUrl = `${S3_BUCKET_URL}/${partitions[i]}${revision}`;
         if (i > 0) viewQuery += ' UNION ALL ';
         viewQuery += `SELECT * FROM parquet_scan('${fileUrl}')`;
       }
