@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # Install required packages
 
-packages <- c("tidyverse", "nanoparquet", "jsonlite", "here")
+packages <- c("tidyverse", "DBI", "duckdb", "jsonlite", "here")
 
 for (pkg in packages) {
   if (!requireNamespace(pkg, quietly = TRUE)) {

@@ -11,18 +11,18 @@ A lightweight, static web application for visualizing tumor vs. normal gene expr
 - **Genome-wide gene search** — query any gene across the full expression matrix
 - **Tumor vs. normal comparisons** — faceted box plots comparing:
   - Primary pediatric tumors from the PBTA cohort (by histology and molecular subtype), with TARGET and GMKF as additional cohorts (grouped by `cancer_group`); all cohorts are shown by default
-  - GTEx normal brain (<40 years old)
+  - GTEx normal tissues, all tissues including brain (<40 years old)
   - Pediatric normal brain tissue (Cerebellum, Cortex, Pituitary, Pons)
-  - Evo-devo developmental timepoints (4 weeks post-conception → elderly)
+  - Evo-devo developmental timepoints for seven tissues (4 weeks post-conception → elderly)
 - **TAPESTRY integration** — uses TAPESTRY plot groups and color scheme for PBTA, for consistent visualization across Rokita Lab tools
 - **Interactive plots** — D3-based visualizations with per-sample tooltips, log₂ scale toggle, and publication-ready export (PDF/JPG/PNG/SVG at 300 DPI)
-- **Configurable display** — filter by tumor cohort, histology, molecular subtype, and normal tissue groups
+- **Configurable display** — filter by tumor cohort, histology, molecular subtype, and normal tissue groups; group GTEx and evo-devo by tissue, subgroup, or prenatal/postnatal; select related tissues by category; show sample counts (N) in the axis labels
 - **Zero infrastructure** — fully static, runs entirely in-browser via DuckDB-WASM querying partitioned Parquet files
 
 ## Repository structure
 
 - **`public/`** — Static web app (HTML/JS, DuckDB-WASM, D3 plotting), plus the Docs and Release notes pages and `plot-groups.tsv` (plot groups for TARGET and GMKF)
-- **`scripts/`** — R preprocessing pipeline to build expression data from OpenPedCan source files
+- **`scripts/`** — R preprocessing pipeline: `00-convert-source-to-parquet.R` converts the OpenPedCan expression matrices to Parquet once, and `01-build-expression-parquet.R` joins them to the sample metadata and writes the partitioned Parquet files the app loads (`update-nbl-subtypes.R` refreshes the neuroblastoma MYCN subtypes)
 - **`data/`** — Expression data in Parquet format (hosted on S3, not in this repo)
 
 ## Running locally
@@ -53,8 +53,8 @@ Tumor cohorts (RNA-Seq, independent primary specimens only, one per participant 
 - **GMKF** — Gabriella Miller Kids First
 
 Normal control cohorts:
-- **GTEx** — adult normal brain, filtered to <40 years
-- **Evo-devo** — developmental brain (4 weeks post-conception through elderly)
+- **GTEx** — adult normal tissues (all tissues, including brain), filtered to <40 years and to samples that passed QC
+- **Evo-devo** — developmental Forebrain, Hindbrain, Heart, Kidney, Liver, Ovary, and Testis (4 weeks post-conception through elderly)
 - **Pediatric normal brain** — non-neoplastic pediatric tissue (Cerebellum, Cortex, Pituitary, Pons)
 
 Plot groups:

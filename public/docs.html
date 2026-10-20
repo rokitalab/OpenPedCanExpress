@@ -39,7 +39,7 @@
       <li>Type a gene symbol (for example <code>EGFR</code>, <code>TP53</code>, or <code>CD276</code>) and press Enter.</li>
       <li>The plot shows expression for each tumor and normal group, with one box per group.</li>
       <li>Use <code>Configure Groups</code> to choose which cohorts, histologies, molecular subtypes, and normal tissues to show.</li>
-      <li>Optional: customize the export by setting the plot width (<code>Box width</code>), <code>Height</code>, <code>Font size</code>, and file type (PDF, JPG, PNG, or SVG).</li>
+      <li>Optional: adjust <code>Font size</code> and <code>Height</code> (they change the plot on screen and in exports), and optionally set the <code>Export box width</code> and file type (PDF, JPG, PNG, or SVG).</li>
       <li>Use <code>Export Plot</code> to save the figure.</li>
     </ol>
     <p>The first load takes a few seconds while the database engine starts. After that, each gene search only downloads the rows for that gene.</p>
@@ -48,10 +48,12 @@
     <ul>
       <li><strong>Facets.</strong> Groups are arranged in facets: tumor cohorts first (<code>PBTA</code>, <code>TARGET</code>, <code>GMKF</code>), then normal controls (Pediatric Brain, Evo-devo, GTEx &lt;40). Facet widths are proportional to the number of groups.</li>
       <li><strong>Boxes.</strong> Each box spans the first to third quartile with a line at the median. Whiskers extend to the most extreme values within 1.5 × the interquartile range of the box.</li>
-      <li><strong>Points.</strong> Every sample is drawn as a point, jittered horizontally so overlapping samples stay visible. Hover over a point to see its sample ID and value.</li>
+      <li><strong>Points.</strong> Every sample is drawn as a point, jittered horizontally so overlapping samples stay visible. Hover over a point to see its sample ID, group, molecular subtype (for tumors), and value.</li>
       <li><strong>Y-axis.</strong> By default, values are log<sub>2</sub>(TPM + 1). Uncheck the <code>log₂ scale</code> option to see raw TPM. The y-axis is shared across all facets so groups can be compared directly.</li>
-      <li><strong>Sorting.</strong> Tumor groups can be sorted alphabetically or by median expression (high to low, or low to high). Evo-devo groups are always in developmental order.</li>
+      <li><strong>Sorting.</strong> Tumor groups can be sorted alphabetically or by median expression (high to low, or low to high). GTEx tissues are alphabetical. Evo-devo groups follow <code>Order Evo-devo by</code> (developmental time, then tissue, by default).</li>
     </ul>
+
+    <p><strong>Many groups, small screens.</strong> The plot fills the window. When there are too many groups to keep the rotated labels readable, it widens instead and scrolls sideways; lower <code>Font size</code> to fit more in the window, or raise it to make the text larger. The plot is redrawn when the window is resized or you zoom the browser (Cmd/Ctrl and +/-).</p>
 
     <h2 id="configure">Configuring sample groups</h2>
     <p>Open <code>Configure Groups</code> to choose what is plotted.</p>
@@ -59,16 +61,24 @@
       <li><code>Cohorts</code>. All cohorts (<code>PBTA</code>, <code>TARGET</code>, and <code>GMKF</code>) are shown by default, each in its own facet. Uncheck a cohort to hide it.</li>
       <li><code>Histologies</code>. Tumor groups, listed under their cohort heading.</li>
       <li><code>Molecular subtypes</code>. Select subtypes to plot those samples separately. <code>Split by molecular subtype</code> divides every tumor group by subtype.</li>
-      <li><code>Control cohorts</code>. Choose GTEx, Evo-devo, and pediatric normal brain groups.</li>
+      <li><code>Control cohorts</code>. Choose GTEx, Evo-devo, and pediatric normal brain groups. By default the plot shows all GTEx tissues, pediatric brain, and evo-devo prenatal and postnatal boxes for all seven tissues.
+        <ul>
+          <li><code>Group Evo-devo by</code>: <code>Prenatal / Postnatal for each tissue</code> (default), <code>Exact timepoint</code>, or <code>Tissue only</code> (one box per tissue). See <a href="#control-groups">Control groups</a>.</li>
+          <li><code>Group GTEx by</code>: <code>Group</code> (whole tissues, default) or <code>Subgroup</code> (for example <code>Brain - Cerebellum</code>).</li>
+          <li><code>Order Evo-devo by</code>: <code>Time, then tissue</code> (default; all prenatal boxes, then all postnatal) or <code>Tissue, then time</code> (each tissue's timepoints together).</li>
+          <li>Select many groups at once with the tissue category checkboxes (such as <code>Reproductive Organs</code> or <code>Skin/Fat</code>), the <code>All &lt;tissue&gt;</code> checkboxes, and, for evo-devo exact timepoints, the prenatal only and postnatal only checkboxes.</li>
+        </ul>
+      </li>
     </ul>
+    <p><code>Top facet labels</code> controls the cohort labels above the plot (<code>PBTA</code>, <code>TARGET</code>, ...). <code>Auto</code> puts a multi-word label on two lines when it is too wide for its facet (for example Pediatric over Brain) and rotates it only when it still does not fit, for example a cohort with one group; you can also force horizontal or rotated labels, or hide them.</p>
+    <p><code>Show sample count (N) in axis labels</code> (on by default) adds each group's number of samples to its label, for example <code>Forebrain-Prenatal (N=32)</code>. The counts update with your selections, including when you split by molecular subtype, and appear in exported plots.</p>
     <p>Click <code>Apply</code> to update the plot.</p>
 
     <h2 id="export">Exporting plots</h2>
-    <p>Choose a format (PDF, JPG, PNG, or SVG; raster images are 300 DPI) and click <code>Export Plot</code>. The export is drawn independently of the on-screen plot, so you can set:</p>
+    <p>Choose a format (PDF, JPG, PNG, or SVG; raster images are 300 DPI) and click <code>Export Plot</code>. By default the export has the same size, proportions and font size as the plot on screen, so what you see is what you get. You can change:</p>
     <ul>
-      <li><code>Box width</code>: pixels per group, which sets the figure width.</li>
-      <li><code>Height</code> of the figure.</li>
-      <li><code>Font size</code>: margins scale with it so labels are not clipped.</li>
+      <li><code>Font size</code> and <code>Height</code>: these also change the plot on screen. Margins scale with the font size so labels are not clipped.</li>
+      <li><code>Export box width</code>: leave blank (auto) to match the screen, or enter the pixels per group to set the figure width yourself, for example to compress a plot with many groups.</li>
     </ul>
 
     <h2 id="data">The underlying data</h2>
@@ -83,24 +93,38 @@
       <li>RNA-Seq tumor samples from the <code>PBTA</code>, <code>TARGET</code>, and <code>GMKF</code> cohorts.</li>
       <li>Only independent primary specimens are used (one per participant within each cohort), from the OpenPedCan independent specimens list for each cohort.</li>
       <li><code>PBTA</code> neuroblastoma specimens are excluded.</li>
+      <li>Neuroblastoma <code>MYCN</code> subtypes come from the OpenPedCan-Project subtyping branch (<code>rokita/subtyping-integrate</code>).</li>
     </ul>
 
     <h3>Normal controls</h3>
     <table>
       <tr><th>Control</th><th>Description</th><th>Data access</th></tr>
-      <tr><td>GTEx &lt;40</td><td>GTEx brain regions, donors aged 20–39</td>
+      <tr><td>GTEx &lt;40</td><td>GTEx tissues (all, including brain regions), donors aged 20–39, samples that passed QC</td>
         <td><a href="https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=phs000424.v11.p2" target="_blank" rel="noopener">dbGaP phs000424</a></td></tr>
       <tr><td>Pediatric Brain</td><td>Non-neoplastic pediatric tissue: Cerebellum, Cortex, Pituitary, Pons</td>
         <td><a href="https://www.ncbi.nlm.nih.gov/bioproject/PRJNA1019377" target="_blank" rel="noopener">BioProject PRJNA1019377</a></td></tr>
-      <tr><td>Evo-devo</td><td>Developmental brain from 4 weeks post-conception through elderly</td>
+      <tr><td>Evo-devo</td><td>Developmental Forebrain, Hindbrain, Heart, Kidney, Liver, Ovary, and Testis from 4 weeks post-conception through elderly</td>
         <td><a href="https://www.ebi.ac.uk/biostudies/arrayexpress/studies/E-MTAB-6814" target="_blank" rel="noopener">ArrayExpress E-MTAB-6814</a></td></tr>
     </table>
     <p>The same control cohorts are used in <a href="https://tapestry.rokitalab.com" target="_blank" rel="noopener">TAPESTRY</a>.</p>
 
     <h2 id="groups">Plot groups</h2>
     <ul>
-      <li><code>PBTA</code>. Histology groups come from <a href="https://tapestry.rokitalab.com" target="_blank" rel="noopener">TAPESTRY</a>, so colors and groups match across Rokita Lab tools.</li>
+      <li><code>PBTA</code>. Histology groups and molecular subtypes come from <a href="https://tapestry.rokitalab.com" target="_blank" rel="noopener">TAPESTRY</a>, so colors, groups and subtypes match across Rokita Lab tools.</li>
       <li><code>TARGET</code> and <code>GMKF</code>. Samples are grouped by OpenPedCan <code>cancer_group</code>. Groups with 3 or fewer samples are not shown, and <code>Ganglioneuroblastoma</code> is combined with <code>Neuroblastoma</code>. The mapping is in <code>plot-groups.tsv</code>.</li>
+    </ul>
+
+    <h3 id="control-groups">Control groups</h3>
+    <ul>
+      <li><strong>GTEx.</strong> The group is the tissue (30 groups, for example <code>Brain</code> or <code>Adipose</code>); the subgroup is the specific site (53 subgroups, for example <code>Brain - Cerebellum</code> or <code>Adipose - Subcutaneous</code>).</li>
+      <li><strong>Evo-devo.</strong> Labels are <code>&lt;tissue&gt;-&lt;timepoint&gt;</code>, for example <code>Forebrain-4 Weeks Post Conception</code> or <code>Heart-Neonate</code>. The prenatal/postnatal grouping combines all post-conception weeks (4-19) into <code>&lt;tissue&gt;-Prenatal</code> and Neonate through Elderly into <code>&lt;tissue&gt;-Postnatal</code>. <code>Tissue only</code> puts every timepoint of a tissue in one box.</li>
+      <li><strong>Tissue categories</strong> (used by the category checkboxes):
+        <code>Brain &amp; Nerve</code> (Brain, Nerve, Forebrain, Hindbrain),
+        <code>Reproductive Organs</code> (Ovary, Testis, Uterus, Vagina, Prostate, Fallopian Tube, Cervix),
+        <code>Skin/Fat</code> (Skin, Adipose),
+        <code>Heart &amp; Blood</code> (Heart, Blood and arteries, Spleen),
+        <code>Digestive</code> (Colon, Esophagus, Small Intestine, Stomach, Liver, Pancreas, Minor Salivary Gland),
+        <code>Kidney &amp; Bladder</code>, <code>Endocrine</code> (Adrenal Gland, Thyroid, Pituitary), <code>Lung</code>, <code>Muscle</code>, <code>Breast</code>, and <code>Cell Lines</code> (cultured fibroblasts and EBV-transformed lymphocytes).</li>
     </ul>
 
     <h2 id="glossary">Glossary</h2>

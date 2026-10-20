@@ -2,7 +2,7 @@
 
 ### Purpose/implementation Section
 
-#### What scientific question is your analysis addressing?
+#### What does this pull request change, and why?
 
 
 
@@ -11,8 +11,19 @@
 
 
 #### What GitHub issue does your pull request address?
+<!--For example, "Closes #12". Remove this section if there is no issue.-->
 
 
+
+#### What does this change affect?
+
+<!-- Check all those that apply. -->
+
+- [ ] The web app (`public/`): plots, the Configure panel, or other behavior users see
+- [ ] Preprocessing (`scripts/`): the Parquet files would change if rebuilt
+- [ ] Source data or metadata (`data/source/`): new or updated inputs, labels, or groups
+- [ ] Documentation only (README, Docs page, release notes)
+- [ ] Deployment or GitHub workflows
 
 ### Directions for reviewers. Tell potential reviewers what kind of feedback you are soliciting.
 
@@ -24,27 +35,35 @@
 
 
 
-#### Is the analysis in a mature enough form that the resulting figure(s) and/or table(s) are ready for review?
+### Testing
+
+#### How did you test this?
+<!--For example, which genes you searched, which groups or options you checked, and how you ran the app (`python3 -m http.server` in `public/`, then open `index.html`). If you rebuilt the Parquet files, note how long it took and any warnings.-->
 
 
 
-### Results
-
-#### What types of results are included (e.g., table, figure)?
-
+#### Screenshots
+<!--For changes to the plots or the Configure panel, add before and after screenshots. Remove this section if not applicable.-->
 
 
-#### What is your summary of the results?
 
+### Data and release impact
 
+<!-- Check all those that apply, or remove this section if it is not applicable. -->
+
+- [ ] This pull request needs the Parquet files to be rebuilt and uploaded to a new data release folder (describe what changes in the data).
+- [ ] The app's default data release (`index.html`) should change when this is released.
+- [ ] No data or release changes are needed.
 
 #### Reproducibility Checklist
 
 <!-- Check all those that apply or remove this section if it is not applicable.-->
 
-- [ ] The dependencies required to run the code in this pull request have been added to the project Dockerfile.
+- [ ] The dependencies required to run the code in this pull request have been added to `scripts/00-install-deps.R` and the project `Dockerfile`.
+- [ ] Any new source file is listed in `data/source/README.md`, and large data files are not committed to git.
 
 #### Documentation Checklist
 
-- [ ] This analysis module has a `README` and it is up to date.
-- [ ] The analytical code is documented and contains comments.
+- [ ] The release notes (`public/releases.js`) describe the change, if users will notice it.
+- [ ] The Docs page (`public/docs.html`) and `README.md` are up to date.
+- [ ] The code is documented and contains comments where the reason is not obvious.
