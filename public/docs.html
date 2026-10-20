@@ -39,7 +39,7 @@
       <li>Type a gene symbol (for example <code>EGFR</code>, <code>TP53</code>, or <code>CD276</code>) and press Enter.</li>
       <li>The plot shows expression for each tumor and normal group, with one box per group.</li>
       <li>Use <code>Configure Groups</code> to choose which cohorts, histologies, molecular subtypes, and normal tissues to show.</li>
-      <li>Optional: customize the export by setting the plot width (<code>Box width</code>), <code>Height</code>, <code>Font size</code>, and file type (PDF, JPG, PNG, or SVG).</li>
+      <li>Optional: adjust <code>Font size</code> and <code>Height</code> (they change the plot on screen and in exports), and optionally set the <code>Export box width</code> and file type (PDF, JPG, PNG, or SVG).</li>
       <li>Use <code>Export Plot</code> to save the figure.</li>
     </ol>
     <p>The first load takes a few seconds while the database engine starts. After that, each gene search only downloads the rows for that gene.</p>
@@ -52,6 +52,8 @@
       <li><strong>Y-axis.</strong> By default, values are log<sub>2</sub>(TPM + 1). Uncheck the <code>log₂ scale</code> option to see raw TPM. The y-axis is shared across all facets so groups can be compared directly.</li>
       <li><strong>Sorting.</strong> Tumor groups can be sorted alphabetically or by median expression (high to low, or low to high). GTEx tissues are alphabetical. Evo-devo groups follow <code>Order Evo-devo by</code> (developmental time, then tissue, by default).</li>
     </ul>
+
+    <p><strong>Many groups, small screens.</strong> The plot fills the window. When there are too many groups to keep the rotated labels readable, it widens instead and scrolls sideways; lower <code>Font size</code> to fit more in the window, or raise it to make the text larger. The plot is redrawn when the window is resized or you zoom the browser (Cmd/Ctrl and +/-).</p>
 
     <h2 id="configure">Configuring sample groups</h2>
     <p>Open <code>Configure Groups</code> to choose what is plotted.</p>
@@ -73,11 +75,10 @@
     <p>Click <code>Apply</code> to update the plot.</p>
 
     <h2 id="export">Exporting plots</h2>
-    <p>Choose a format (PDF, JPG, PNG, or SVG; raster images are 300 DPI) and click <code>Export Plot</code>. The export is drawn independently of the on-screen plot, so you can set:</p>
+    <p>Choose a format (PDF, JPG, PNG, or SVG; raster images are 300 DPI) and click <code>Export Plot</code>. By default the export has the same size, proportions and font size as the plot on screen, so what you see is what you get. You can change:</p>
     <ul>
-      <li><code>Box width</code>: pixels per group, which sets the figure width.</li>
-      <li><code>Height</code> of the figure.</li>
-      <li><code>Font size</code>: margins scale with it so labels are not clipped.</li>
+      <li><code>Font size</code> and <code>Height</code>: these also change the plot on screen. Margins scale with the font size so labels are not clipped.</li>
+      <li><code>Export box width</code>: leave blank (auto) to match the screen, or enter the pixels per group to set the figure width yourself, for example to compress a plot with many groups.</li>
     </ul>
 
     <h2 id="data">The underlying data</h2>

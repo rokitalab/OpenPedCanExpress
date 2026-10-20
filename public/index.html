@@ -176,6 +176,8 @@
     .plot-container {
       margin-top: 2rem;
       min-height: 500px;
+      /* a plot with many groups is wider than the window and scrolls sideways */
+      overflow-x: auto;
     }
 
     .plot-title {
@@ -397,13 +399,13 @@
       </div>
 
       <div style="display: flex; gap: 0.5rem; align-items: center;">
-        <label for="export-box-width" style="font-weight: 600; color: #666;" title="Pixel width per group; lower to compress a plot with many groups">Box width:</label>
-        <input type="number" id="export-box-width" value="65" min="20" max="200" step="5"
+        <label for="export-box-width" style="font-weight: 600; color: #666;" title="Pixel width per group in exported plots. Leave blank (auto) to export at the size shown on screen; set a number to compress or expand a plot with many groups.">Export box width:</label>
+        <input type="number" id="export-box-width" value="" placeholder="auto" min="20" max="200" step="5"
                style="width: 64px; padding: 0.5rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px;" />
-        <label for="export-height" style="font-weight: 600; color: #666;">Height:</label>
+        <label for="export-height" style="font-weight: 600; color: #666;" title="Plot height in pixels, on screen and in exports">Height:</label>
         <input type="number" id="export-height" value="500" min="200" max="1200" step="20"
                style="width: 72px; padding: 0.5rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px;" />
-        <label for="export-font-size" style="font-weight: 600; color: #666;">Font size:</label>
+        <label for="export-font-size" style="font-weight: 600; color: #666;" title="Text size on screen and in exports. With many groups the plot widens and scrolls sideways so labels stay readable.">Font size:</label>
         <input type="number" id="export-font-size" value="14" min="8" max="28" step="1"
                style="width: 56px; padding: 0.5rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px;" />
       </div>
@@ -537,6 +539,9 @@
 
     <div class="plot-container">
       <div class="plot-title" id="plot-title"></div>
+      <div id="plot-scroll-hint" style="display: none; margin: -0.5rem 0 0.5rem; font-size: 0.85rem; color: #777;">
+        Scroll sideways to see all groups, or lower <em>Font size</em> to fit the window.
+      </div>
       <svg id="plot-svg" width="1200" height="500"></svg>
     </div>
 
@@ -1244,43 +1249,64 @@
       });
     }
 
+    // Width of the on-screen plot: the window width, or wider when the groups would be too
+    // crowded for the rotated labels to stay readable (the container then scrolls sideways).
+    function screenPlotWidth(facetBuckets, groups, fontSize) {
+      const margin = marginForFontSize(fontSize);
+      const minStep = fontSize * 1.6;  // rotated 45 degrees, labels need ~1.1 x font size between lines
+      const minWidth = margin.left + margin.right
+        + FACET_GAP * Math.max(0, facetBuckets.length - 1) + groups.length * minStep;
+      return Math.max(document.querySelector('.plot-container').clientWidth, Math.ceil(minWidth));
+    }
+
     function renderPlot() {
       if (!currentData || currentData.length === 0) return;
 
       const log2Scale = document.getElementById('log2-toggle').checked;
       const { facetBuckets, groups } = computeFacetBuckets(log2Scale);
 
-      // Make plot responsive to container width
+      // Font size and height come from the toolbar (shared with exports). The plot fills the
+      // window width, but when the groups would be squeezed so that rotated labels overlap
+      // it widens instead and the container scrolls sideways.
+      const fontSize = parseFloat(document.getElementById('export-font-size').value) || BASE_FONT_SIZE;
+      const height = parseFloat(document.getElementById('export-height').value) || 500;
       const container = document.querySelector('.plot-container');
-      const width = Math.min(1400, container.clientWidth);
-      const height = 500;
+      const width = screenPlotWidth(facetBuckets, groups, fontSize);
 
       const svg = d3.select('#plot-svg');
-      drawChart(svg, width, height, facetBuckets, groups, log2Scale, BASE_FONT_SIZE, true);
+      drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize, true);
 
       // Update title
       document.getElementById('plot-title').textContent = `${currentGene} Expression`;
+      document.getElementById('plot-scroll-hint').style.display = width > container.clientWidth ? 'block' : 'none';
     }
 
-    // Builds an off-screen SVG sized from the user's box width/height/font size
-    // controls, so the user can compress or expand the export directly instead
-    // of relying on an automatic heuristic. Returns the detached <svg> DOM node
-    // plus its pixel dimensions.
+    // Builds an off-screen SVG for export. By default it is drawn exactly as on screen (same
+    // width, height, font size and proportions). If the user sets an export box width, the
+    // width is that many pixels per group instead, so a plot with many groups can be
+    // compressed or expanded. Returns the detached <svg> DOM node plus its pixel dimensions.
     function buildExportSvg() {
       const log2Scale = document.getElementById('log2-toggle').checked;
       const { facetBuckets, groups } = computeFacetBuckets(log2Scale);
 
-      const boxWidth = parseFloat(document.getElementById('export-box-width').value) || 65;
+      const boxWidth = parseFloat(document.getElementById('export-box-width').value);
       const height = parseFloat(document.getElementById('export-height').value) || 500;
       const fontSize = parseFloat(document.getElementById('export-font-size').value) || BASE_FONT_SIZE;
+
+      const svg = d3.create('svg').attr('xmlns', 'http://www.w3.org/2000/svg');
+
+      if (!(boxWidth > 0)) {
+        // Same as on screen
+        const width = screenPlotWidth(facetBuckets, groups, fontSize);
+        drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize, true);
+        return { node: svg.node(), width, height: +svg.attr('height') };
+      }
 
       const groupCount = groups.length;
       const margin = marginForFontSize(fontSize);
       margin.left = Math.max(margin.left, leftLabelOverhang(facetBuckets, fontSize, boxWidth));
       const facetGapTotal = FACET_GAP * Math.max(0, facetBuckets.length - 1);
       const width = margin.left + margin.right + facetGapTotal + groupCount * boxWidth;
-
-      const svg = d3.create('svg').attr('xmlns', 'http://www.w3.org/2000/svg');
       drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize);
 
       return { node: svg.node(), width, height };
@@ -1870,6 +1896,21 @@
 
     document.getElementById('show-n-toggle').addEventListener('change', () => {
       if (currentData) renderPlot();
+    });
+
+    // Font size and height apply to the on-screen plot as well as exports
+    ['export-font-size', 'export-height'].forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        if (currentData) renderPlot();
+      });
+    });
+
+    // Redraw when the window is resized or the browser zoom changes (Cmd/Ctrl +/-), which
+    // changes the width available to the plot
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => { if (currentData) renderPlot(); }, 150);
     });
 
     document.querySelectorAll('input[name="facet-labels"]').forEach(radio => {
