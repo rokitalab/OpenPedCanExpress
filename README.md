@@ -15,7 +15,7 @@ A lightweight, static web application for visualizing tumor vs. normal gene expr
   - Pediatric normal brain tissue (Cerebellum, Cortex, Pituitary, Pons)
   - Evo-devo developmental timepoints for seven tissues (4 weeks post-conception → elderly)
 - **TAPESTRY integration** — uses TAPESTRY plot groups and color scheme for PBTA, for consistent visualization across Rokita Lab tools
-- **Interactive plots** — D3-based visualizations with per-sample tooltips, log₂ scale toggle, and publication-ready export (PDF/JPG/PNG/SVG at 300 DPI)
+- **Interactive plots** — D3-based visualizations with per-sample tooltips, log₂ / log₁₀ / linear scale selector, and publication-ready export (PDF/JPG/PNG/SVG at 300 DPI)
 - **Configurable display** — filter by tumor cohort, histology, molecular subtype, and normal tissue groups; group GTEx and evo-devo by tissue, subgroup, or prenatal/postnatal; select related tissues by category; show sample counts (N) in the axis labels
 - **Zero infrastructure** — fully static, runs entirely in-browser via DuckDB-WASM querying partitioned Parquet files
 
