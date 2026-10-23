@@ -380,11 +380,13 @@
         />
       </div>
 
-      <div class="toggle-group">
-        <label>
-          <input type="checkbox" id="log2-toggle" checked />
-          <span>log₂ scale</span>
-        </label>
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <label for="scale-select" style="font-weight: 600; color: #666;">Scale:</label>
+        <select id="scale-select" style="padding: 0.75rem; font-size: 0.95rem; border: 2px solid #ddd; border-radius: 6px; cursor: pointer;">
+          <option value="log2" selected>log2(TPM + 1)</option>
+          <option value="log10">log10(TPM + 1)</option>
+          <option value="linear">TPM (linear)</option>
+        </select>
       </div>
 
       <button class="secondary" id="configure-btn">Configure Groups</button>
@@ -878,9 +880,15 @@
 
     // Computes the grouped/faceted data (width-independent). Shared by the
     // on-screen render and the export render so both stay in sync.
-    function computeFacetBuckets(log2Scale) {
+    const SCALES = {
+      log2: { fn: (tpm) => Math.log2(tpm + 1), label: 'log₂(TPM + 1)' },
+      log10: { fn: (tpm) => Math.log10(tpm + 1), label: 'log₁₀(TPM + 1)' },
+      linear: { fn: (tpm) => tpm, label: 'TPM' },
+    };
+
+    function computeFacetBuckets(scale) {
       // Transform TPM values
-      const xform = (tpm) => log2Scale ? Math.log2(tpm + 1) : tpm;
+      const xform = SCALES[scale].fn;
 
       // Check if we should split by molecular subtype
       const splitBySubtype = document.getElementById('split-subtypes-toggle').checked;
@@ -1016,8 +1024,8 @@
     // Draws the chart into `svg` at the given pixel size, given already-computed
     // facetBuckets/groups (from computeFacetBuckets). Used for both the on-screen
     // render and the (independently sized) export render.
-    function drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize = BASE_FONT_SIZE, autoGrowHeight = false) {
-      const xform = (tpm) => log2Scale ? Math.log2(tpm + 1) : tpm;
+    function drawChart(svg, width, height, facetBuckets, groups, scale, fontSize = BASE_FONT_SIZE, autoGrowHeight = false) {
+      const xform = SCALES[scale].fn;
       const margin = marginForFontSize(fontSize);
       // Widen the left margin when a long leftmost label would be cut off (capped so the plot area stays usable)
       const approxStep = (width - margin.left - margin.right) / Math.max(groups.length, 1);
@@ -1138,7 +1146,7 @@
         .attr('font-size', axisTitleSize)
         .attr('font-weight', 600)
         .style('fill', '#000')
-        .text(log2Scale ? 'log₂(TPM + 1)' : 'TPM');
+        .text(SCALES[scale].label);
 
       // Facet strip labels (TAPESTRY-style with underline)
       facetBuckets.forEach((f, i) => {
@@ -1267,7 +1275,7 @@
             .attr('stroke', '#333')
             .attr('stroke-width', 0.5)
             .style('cursor', 'pointer')
-            .on('mouseover', (event) => showTooltip(event, v, label, log2Scale))
+            .on('mouseover', (event) => showTooltip(event, v, label, scale))
             .on('mouseout', hideTooltip);
         });
       });
@@ -1286,8 +1294,8 @@
     function renderPlot() {
       if (!currentData || currentData.length === 0) return;
 
-      const log2Scale = document.getElementById('log2-toggle').checked;
-      const { facetBuckets, groups } = computeFacetBuckets(log2Scale);
+      const scale = document.getElementById('scale-select').value;
+      const { facetBuckets, groups } = computeFacetBuckets(scale);
 
       // Font size and height come from the toolbar (shared with exports). The plot fills the
       // window width, but when the groups would be squeezed so that rotated labels overlap
@@ -1298,7 +1306,7 @@
       const width = screenPlotWidth(facetBuckets, groups, fontSize);
 
       const svg = d3.select('#plot-svg');
-      drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize, true);
+      drawChart(svg, width, height, facetBuckets, groups, scale, fontSize, true);
 
       // Update title
       document.getElementById('plot-title').textContent = `${currentGene} Expression`;
@@ -1310,8 +1318,8 @@
     // width is that many pixels per group instead, so a plot with many groups can be
     // compressed or expanded. Returns the detached <svg> DOM node plus its pixel dimensions.
     function buildExportSvg() {
-      const log2Scale = document.getElementById('log2-toggle').checked;
-      const { facetBuckets, groups } = computeFacetBuckets(log2Scale);
+      const scale = document.getElementById('scale-select').value;
+      const { facetBuckets, groups } = computeFacetBuckets(scale);
 
       const boxWidth = parseFloat(document.getElementById('export-box-width').value);
       const height = parseFloat(document.getElementById('export-height').value) || 500;
@@ -1322,7 +1330,7 @@
       if (!(boxWidth > 0)) {
         // Same as on screen
         const width = screenPlotWidth(facetBuckets, groups, fontSize);
-        drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize, true);
+        drawChart(svg, width, height, facetBuckets, groups, scale, fontSize, true);
         return { node: svg.node(), width, height: +svg.attr('height') };
       }
 
@@ -1331,7 +1339,7 @@
       margin.left = Math.max(margin.left, leftLabelOverhang(facetBuckets, fontSize, boxWidth));
       const facetGapTotal = FACET_GAP * Math.max(0, facetBuckets.length - 1);
       const width = margin.left + margin.right + facetGapTotal + groupCount * boxWidth;
-      drawChart(svg, width, height, facetBuckets, groups, log2Scale, fontSize, true);
+      drawChart(svg, width, height, facetBuckets, groups, scale, fontSize, true);
 
       return { node: svg.node(), width, height: +svg.attr('height') };
     }
@@ -1340,10 +1348,10 @@
     // Tooltip
     // ===========================================================================
 
-    function showTooltip(event, dataPoint, group, isLog2) {
+    function showTooltip(event, dataPoint, group, scale) {
       const tooltip = document.getElementById('tooltip');
-      const value = isLog2 ? Math.log2(dataPoint.tpm + 1) : dataPoint.tpm;
-      const label = isLog2 ? 'log₂(TPM+1)' : 'TPM';
+      const value = SCALES[scale].fn(dataPoint.tpm);
+      const label = SCALES[scale].label.replace(' + 1', '+1');
       const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
       // Molecular subtype (tumors), unless the group label already shows it (split by subtype)
@@ -1916,7 +1924,7 @@
       }
     });
 
-    document.getElementById('log2-toggle').addEventListener('change', () => {
+    document.getElementById('scale-select').addEventListener('change', () => {
       if (currentData) renderPlot();
     });
 
